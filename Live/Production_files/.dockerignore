@@ -1,0 +1,45 @@
+# Never ship secrets or local env files into the image
+.env
+**/.env
+**/*.env
+
+# Version control / editor
+.git
+.gitignore
+.vscode
+.idea
+
+# Python runtime cruft
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.multidoc/
+
+# Notebooks & teaching-only assets (not needed to run the app)
+*.ipynb
+.ipynb_checkpoints/
+student_files/
+src/VectorDBs/
+
+# Local run artifacts
+logs/
+*.log
+data/faiss_index_*/
+
+# Docs and slides
+*.md
+*.pptx
+*.pdf
+
+# OS cruft
+.DS_Store
+Thumbs.db

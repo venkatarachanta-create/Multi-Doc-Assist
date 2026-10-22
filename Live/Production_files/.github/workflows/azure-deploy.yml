@@ -1,0 +1,49 @@
+name: Build and deploy to Azure App Service
+
+# Runs whenever main changes. This is the "CI/CD" step — after this is
+# wired up, a push to main is the deployment; nobody runs deploy.sh by hand again.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}   # lets you trigger it manually from the Actions tab too
+
+env:
+  AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}     # set in repo Settings > Variables
+  ACR_NAME: ${{ vars.ACR_NAME }}                       # e.g. acrmultidocassist
+  IMAGE_NAME: multidoc-assist
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_NAME }}.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Log in to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}   # service principal JSON, see deploy/azure/README.md
+
+      - name: Point the Web App at the new image
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          images: ${{ env.ACR_NAME }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Log out of Azure
+        run: az logout
+        if: always()
