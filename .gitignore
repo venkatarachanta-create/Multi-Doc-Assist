@@ -119,3 +119,25 @@ htmlcov/
 # =========================================================
 
 *.pid
+# =========================================================
+
+# RAG Application Runtime Data
+
+# =========================================================
+
+# Uploaded documents - may contain personal or confidential data
+
+Live/Production_files/data/Input_files/
+
+# Generated FAISS vector indexes
+
+Live/Production_files/data/faiss_index_*/
+
+# Application logs
+
+Live/Production_files/logs/
+
+# Python bytecode and cache (all directories)
+
+**/**pycache**/
+*.pyc
