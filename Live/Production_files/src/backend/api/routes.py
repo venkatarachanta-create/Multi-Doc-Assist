@@ -19,21 +19,29 @@
 #    what does @retry do when every attempt fails?)
 
 from fastapi import APIRouter, UploadFile, Form
+from starlette.concurrency import run_in_threadpool
+
 from src.backend.logger import GLOBAL_LOGGER as log
 from src.shared.schemas import QueryRequest, QueryResponse
 from src.backend.services.ingestion_service import ingest_document
 from src.backend.services.retrieval_service import retrieve_answer
 
-
 router = APIRouter()
 
 
 @router.post("/upload")
-async def upload(file: UploadFile, embedding_model: str = Form(...)):
+async def upload(
+    file: UploadFile,
+    embedding_model: str = Form(...)
+):
+    log.info(
+        "Upload File API Triggered",
+        embedding_model=embedding_model
+    )
 
-    log.info('Upload File API Trigerred', embedding_model=embedding_model)
     chunks = await ingest_document(file, embedding_model)
-    log.info('Upload File completed')
+
+    log.info("Upload File completed")
 
     return {"chunks": chunks}
 
@@ -41,8 +49,23 @@ async def upload(file: UploadFile, embedding_model: str = Form(...)):
 @router.post("/retrieve", response_model=QueryResponse)
 async def retrieve(request: QueryRequest):
 
-    log.info('Retrieve API Trigerred', embedding_model=request.embedding_model)
-    answer, answer_texts, evaluation_metric = retrieve_answer(request.question, request.embedding_model, request.retriever_type)
-    log.info('Answer Retrieved')
+    log.info(
+        "Retrieve API Triggered",
+        embedding_model=request.embedding_model
+    )
 
-    return QueryResponse(answer=answer, answer_texts=answer_texts, evaluation_metric=evaluation_metric)
+    # Execute synchronous RAG pipeline in a worker thread
+    answer, answer_texts, evaluation_metric = await run_in_threadpool(
+        retrieve_answer,
+        request.question,
+        request.embedding_model,
+        request.retriever_type
+    )
+
+    log.info("Answer Retrieved")
+
+    return QueryResponse(
+        answer=answer,
+        answer_texts=answer_texts,
+        evaluation_metric=evaluation_metric
+    )

@@ -14,6 +14,7 @@
 # 3. List the evaluation metrics returned by this service.
 
 from langchain_community.vectorstores import FAISS
+
 from src.backend.rag.deduplicator import remove_deduplicated_documents
 from src.backend.rag.chain import get_conversational_chain
 from src.backend.rag.embeddings import get_embeddings
@@ -22,79 +23,195 @@ from src.backend.rag.mmr import mmr
 from src.backend.core.config import settings
 from src.backend.logger import GLOBAL_LOGGER as log
 from src.backend.rag.multi_query_retriever import multi_query_retrieval
-from tenacity import retry, stop_after_attempt, wait_exponential
-from src.backend.evaluation.ragas_eval import evaluate_context_precision, evaluate_response_relevancy, evaluate_context_recall, evaluate_factual_correctness, evaluate_faithfulness, evaluate_hallucination, evaluate_llm_judge
+
 from langsmith import traceable
 
 
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    reraise=True,
+@traceable(
+    run_type="chain",
+    name="Retrieve Answer",
+    project_name=settings.LANGCHAIN_PROJECT
 )
-@traceable(run_type="chain", name="Retrieve Answer", project_name=settings.LANGCHAIN_PROJECT)
-def retrieve_answer(question: str, embedding_model: str, retriever_type: str) -> str:
-    # Hint: this function is the top-level answer pipeline.
-    # It chooses one retrieval strategy, cleans results, generates an answer, and evaluates quality.
+def retrieve_answer(
+    question: str,
+    embedding_model: str,
+    retriever_type: str,
+    source_id: str = None
+):
+    """
+    Online RAG pipeline:
+
+    1. Initialize embeddings.
+    2. Load FAISS index.
+    3. Retrieve relevant documents.
+    4. Optionally filter by source_id.
+    5. Remove duplicate documents.
+    6. Generate an answer using the LLM.
+    7. Return answer and retrieved context.
+
+    source_id=None:
+        Search across all indexed documents.
+
+    source_id=<id>:
+        Search only the selected source document.
+
+    Detailed evaluation is handled separately.
+    """
+
     try:
 
-        log.info("Retrieval started", question=question, embedding_model=embedding_model)
+        log.info(
+            "Retrieval started",
+            embedding_model=embedding_model,
+            retriever_type=retriever_type,
+            source_id=source_id
+        )
+
+        # --------------------------------------------------
+        # Step 1: Initialize embeddings
+        # --------------------------------------------------
 
         embeddings = get_embeddings(embedding_model)
+
         index_path = f"{settings.INDEX_PATH}_{embedding_model}"
 
-        # Method 1: basic FAISS similarity search
+        # --------------------------------------------------
+        # Step 2: Retrieve documents
+        # --------------------------------------------------
+
         if retriever_type == "FAISS Retriever":
-            new_db = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-            docs = new_db.similarity_search(question)
 
-        # Method 2: contextual compression
+            new_db = FAISS.load_local(
+                index_path,
+                embeddings,
+                allow_dangerous_deserialization=True
+            )
+
+            search_kwargs = {
+                "k": 5
+            }
+
+            if source_id:
+
+                search_kwargs["filter"] = {
+                    "source_id": source_id
+                }
+
+            docs = new_db.similarity_search(
+                query=question,
+                **search_kwargs
+            )
+
         elif retriever_type == "Contextual Compression Retriever":
-            docs = contextual_compression(index_path, question, embeddings)
 
-        # Method 3: MMR
+            docs = contextual_compression(
+                index_path,
+                question,
+                embeddings,
+                source_id=source_id
+            )
+
         elif retriever_type == "MMR Retriever":
-            docs = mmr(index_path, question, embeddings)
 
-        # Method 4: multi-query retrieval
+            docs = mmr(
+                index_path,
+                question,
+                embeddings,
+                source_id=source_id
+            )
+
         elif retriever_type == "Multi Query Retriever":
-            docs = multi_query_retrieval(index_path, question, embeddings)
+
+            docs = multi_query_retrieval(
+                index_path,
+                question,
+                embeddings,
+                source_id=source_id
+            )
+
         else:
-            raise ValueError(f"Unsupported retriever type: {retriever_type}")
+
+            raise ValueError(
+                f"Unsupported retriever type: {retriever_type}"
+            )
+
+        # --------------------------------------------------
+        # Step 3: Remove duplicate documents
+        # --------------------------------------------------
 
         docs = remove_deduplicated_documents(docs)
-        answer_texts = [doc.page_content for doc in docs]
+
+        # --------------------------------------------------
+        # Step 4: Validate source filtering
+        # --------------------------------------------------
+
+        if source_id:
+
+            incorrect_sources = [
+                doc for doc in docs
+                if doc.metadata.get("source_id") != source_id
+            ]
+
+            if incorrect_sources:
+
+                raise ValueError(
+                    "Source filtering validation failed. "
+                    "Retrieved documents contain unexpected sources."
+                )
+
+        # --------------------------------------------------
+        # Step 5: Extract document content
+        # --------------------------------------------------
+
+        answer_texts = [
+            doc.page_content for doc in docs
+        ]
+
+        # --------------------------------------------------
+        # Step 6: Format context
+        # --------------------------------------------------
+
+        context = "\n\n".join(answer_texts)
+
+        # --------------------------------------------------
+        # Step 7: Initialize conversational chain
+        # --------------------------------------------------
 
         chain = get_conversational_chain()
 
+        # --------------------------------------------------
+        # Step 8: Generate answer
+        # --------------------------------------------------
+
         response = chain.invoke(
-            {"context": docs, "question": question},
-            return_only_outputs=True,
+            {
+                "context": context,
+                "question": question
+            }
         )
 
-        log.info("Answer generated")
+        log.info(
+            "Answer generated successfully",
+            retrieved_document_count=len(answer_texts),
+            source_id=source_id
+        )
 
-        context_precision = evaluate_context_precision(question, response, answer_texts)
-        response_relevancy = evaluate_response_relevancy(question, response, embeddings, answer_texts)
-        contextual_recall = evaluate_context_recall(question, response, answer_texts)
-        factual_correctness = evaluate_factual_correctness(question, response)
-        faithfulness = evaluate_faithfulness(question, response, answer_texts)
-        hallucination = evaluate_hallucination(question, response, answer_texts)
-        llm_judge = evaluate_llm_judge(question, response, answer_texts)
+        # --------------------------------------------------
+        # Step 9: Evaluation status
+        # --------------------------------------------------
 
-        # Consolidating Evaluation Metrics
         evaluation_metric = {
-            "context_precision": context_precision,
-            "response_relevancy": response_relevancy,
-            "contextual_recall": contextual_recall,
-            "factual_correctness": factual_correctness,
-            "faithfulness": faithfulness,
-            "hallucination": hallucination,
-            "llm_judge": llm_judge,
+            "status": "not_run",
+            "mode": "offline"
         }
 
         return response, answer_texts, evaluation_metric
 
     except Exception as e:
-        log.error("Error during Retrieval service", error=str(e))
-        raise e
+
+        log.error(
+            "Error during Retrieval service",
+            error=str(e)
+        )
+
+        raise

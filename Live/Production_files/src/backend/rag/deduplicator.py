@@ -15,11 +15,41 @@ from src.backend.logger import GLOBAL_LOGGER as log
 
 
 def remove_deduplicated_documents(documents):
-    # Hint: this removes exact duplicates only.
-    # It does not detect paraphrases or semantically similar chunks.
+    """
+    Remove exact duplicate chunks while preserving
+    identical content from different source documents.
+    """
+
     try:
-        unique_docs = list({doc.page_content: doc for doc in documents}.values())
+        unique_docs = []
+        seen = set()
+
+        for doc in documents:
+
+            source_id = doc.metadata.get("source_id", "unknown")
+
+            content = doc.page_content.strip()
+
+            deduplication_key = (source_id, content)
+
+            if deduplication_key not in seen:
+
+                seen.add(deduplication_key)
+                unique_docs.append(doc)
+
+        log.info(
+            "Document deduplication completed",
+            original_count=len(documents),
+            unique_count=len(unique_docs)
+        )
+
         return unique_docs
+
     except Exception as e:
-        log.error("Error during document deduplication", error=str(e))
-        raise e
+
+        log.error(
+            "Error during document deduplication",
+            error=str(e)
+        )
+
+        raise
