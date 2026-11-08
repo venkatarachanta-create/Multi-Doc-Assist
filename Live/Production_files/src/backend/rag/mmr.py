@@ -12,30 +12,72 @@
 # 3. Describe what lambda_mult does in your own words.
 
 from langchain_community.vectorstores import FAISS
-from src.backend.rag.embeddings import get_embeddings
+
 from src.backend.logger import GLOBAL_LOGGER as log
-from src.backend.core.config import settings
+from src.backend.rag.retriever_config import get_faiss_retriever
 
 
-def mmr(index_path, query: str, embeddings):
-    # Hint: MMR first loads the vector store, then asks for diverse but relevant chunks.
+def mmr(
+    index_path,
+    query: str,
+    embeddings,
+    source_id=None
+):
+    """
+    Retrieve diverse and relevant documents using MMR,
+    with optional source-level filtering.
+    """
+
     try:
-        log.info("MMR invoked", query=query)
 
-        new_db = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-        log.info("FAISS index loaded")
-
-        docs = new_db.max_marginal_relevance_search(
+        log.info(
+            "MMR retrieval invoked",
             query=query,
-            k=5,
-            fetch_k=20,
-            lambda_mult=0.7,
+            source_id=source_id
         )
 
-        log.info("MMR documents retrieved", count=len(docs))
+        # 1. Load FAISS index
+        vector_store = FAISS.load_local(
+            index_path,
+            embeddings,
+            allow_dangerous_deserialization=True
+        )
+
+        log.info("FAISS index loaded")
+
+        # 2. Configure source-aware MMR retriever
+        search_kwargs = {
+            "k": 5,
+            "fetch_k": 20,
+            "lambda_mult": 0.7
+        }
+
+        if source_id:
+            search_kwargs["filter"] = {
+                "source_id": source_id
+            }
+
+        retriever = vector_store.as_retriever(
+            search_type="mmr",
+            search_kwargs=search_kwargs
+        )
+
+        # 3. Retrieve documents
+        docs = retriever.invoke(query)
+
+        log.info(
+            "MMR retrieval completed",
+            count=len(docs),
+            source_id=source_id
+        )
 
         return docs
 
     except Exception as e:
-        log.error("Error during MMR retrieval", error=str(e))
-        raise e
+
+        log.error(
+            "Error during MMR retrieval",
+            error=str(e)
+        )
+
+        raise

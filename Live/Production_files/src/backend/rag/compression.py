@@ -11,36 +11,79 @@
 # 2. Identify the role of CohereRerank.
 # 3. Describe when this strategy is better than basic FAISS retrieval.
 
-from src.backend.logger import GLOBAL_LOGGER as log
-from src.backend.rag.llm import get_llm
 from langchain_community.vectorstores import FAISS
 from langchain_classic.retrievers import ContextualCompressionRetriever
 from langchain_cohere.rerank import CohereRerank
+
+from src.backend.logger import GLOBAL_LOGGER as log
 from src.backend.core.config import settings
+from src.backend.rag.retriever_config import get_faiss_retriever
 
 
-def contextual_compression(index_path, query, embeddings):
-    # Hint: this function wraps a base retriever with a compressor.
-    # The base retriever finds candidate chunks.
-    # The compressor/reranker narrows them down.
+def contextual_compression(
+    index_path,
+    query,
+    embeddings,
+    source_id=None
+):
+    """
+    Retrieve candidate documents using FAISS,
+    optionally filter by source_id, and rerank
+    using Cohere contextual compression.
+    """
+
     try:
-        log.info("Contextual compression invoked", query=query)
 
-        new_db = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True).as_retriever()
+        log.info(
+            "Contextual compression invoked",
+            query=query,
+            source_id=source_id
+        )
+
+        # 1. Load FAISS index
+        vector_store = FAISS.load_local(
+            index_path,
+            embeddings,
+            allow_dangerous_deserialization=True
+        )
+
         log.info("FAISS index loaded")
 
-        compressor = CohereRerank(model="rerank-v3.5", cohere_api_key=settings.COHERE_API_KEY)
+        # 2. Create source-aware base retriever
+        base_retriever = get_faiss_retriever(
+            vector_store=vector_store,
+            source_id=source_id,
+            k=20
+        )
 
-        # The reranker scores candidate chunks by query relevance.
+        # 3. Initialize Cohere reranker
+        compressor = CohereRerank(
+            model="rerank-v3.5",
+            cohere_api_key=settings.COHERE_API_KEY,
+            top_n=5
+        )
+
+        # 4. Apply contextual compression
         compression_retriever = ContextualCompressionRetriever(
             base_compressor=compressor,
-            base_retriever=new_db,
+            base_retriever=base_retriever
         )
+
         compressed_docs = compression_retriever.invoke(query)
 
-        log.info("Compression Retriever fetched documents")
+        log.info(
+            "Compression retrieval completed",
+            retrieved_documents=len(compressed_docs),
+            source_id=source_id
+        )
+
         return compressed_docs
 
     except Exception as e:
-        log.error("Error during contextual compression", error=str(e))
-        raise e
+
+        log.error(
+            "Error during contextual compression",
+            error=str(e)
+        )
+
+        raise
