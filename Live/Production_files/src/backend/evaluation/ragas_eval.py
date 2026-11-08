@@ -31,214 +31,245 @@
 #    the way you expected?
 
 from ragas.llms import LangchainLLMWrapper
-from ragas import SingleTurnSample  # user_input, response, retrieved_contexts, reference
+from ragas import SingleTurnSample
+
 from ragas.embeddings import LangchainEmbeddingsWrapper
-from ragas.metrics import LLMContextPrecisionWithoutReference, ResponseRelevancy, Faithfulness, LLMContextRecall, FactualCorrectness
-import asyncio
+
+from ragas.metrics import (
+    LLMContextPrecisionWithoutReference,
+    ResponseRelevancy,
+    Faithfulness,
+    LLMContextRecall,
+    FactualCorrectness
+)
+
 from src.backend.logger import GLOBAL_LOGGER as log
 from src.backend.rag.llm import get_llm
-from src.backend.rag.embeddings import get_embeddings
-from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+
+from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import PromptTemplate
-from src.backend.core.config import settings
 
 
-def evaluate_hallucination(query, response, retrieved_context):
-    """
-    Measures if the answer contains information NOT present in the context.
-    Ragas uses 'Faithfulness' for this. A low Faithfulness score = High Hallucination.
-    """
-    try:
-        log.info('Checking for Hallucinations')
-        sample = SingleTurnSample(
-            user_input=query,
-            response=response,
-            retrieved_contexts=retrieved_context,
-        )
-        async def main():
-            llm = get_llm()
-            evaluator_llm = LangchainLLMWrapper(llm)
-            # Faithfulness: Is the answer derived solely from the context?
-            metric = Faithfulness(llm=evaluator_llm)
-            score = await metric.single_turn_ascore(sample)
+# ---------------------------------------------------------
+# Helper: Initialize RAGAS evaluator LLM
+# ---------------------------------------------------------
 
-            # Hallucination Score can be interpreted as 1 - Faithfulness
-            hallucination_score = 1 - score
-            return {
-                "hallucination_detected": hallucination_score > 0.1,  # Threshold
-                "hallucination_score": hallucination_score
-            }
+def get_evaluator_llm():
 
-        return asyncio.run(main())
-    except Exception as e:
-        log.error("Error during hallucination check", error=str(e))
-        return e
-
-
-def evaluate_factual_correctness(query, response):
-    # Hint: this is the only metric that needs settings.REFERENCE_ANSWER —
-    # it's checking the answer against a known-correct reference, not just
-    # against the retrieved context. What does that mean for how useful
-    # this metric is on a real user question with no reference answer?
-    try:
-        log.info('Evaluating Factual Correctness')
-        sample = SingleTurnSample(
-            user_input=query,
-            response=response,
-            reference=settings.REFERENCE_ANSWER,
-        )
-        async def main():
-            llm = get_llm()
-            evaluator_llm = LangchainLLMWrapper(llm)
-            # AnswerCorrectness weights semantic similarity and factual correctness
-            correctness = FactualCorrectness(llm=evaluator_llm)
-            result = await correctness.single_turn_ascore(sample)
-            return result
-
-        return asyncio.run(main())
-    except Exception as e:
-        log.error("Error during evaluating Factual Correctness", error=str(e))
-        return e
-
-
-def evaluate_context_recall(query, response, retrieved_context):
-    try:
-        log.info('Evaluating Contextual Recall')
-        sample = SingleTurnSample(
-            user_input=query,
-            response=response,
-            reference=settings.REFERENCE_ANSWER,
-            retrieved_contexts=retrieved_context,
-        )
-        async def main():
-            llm = get_llm()
-            evaluator_llm = LangchainLLMWrapper(llm)
-            recall = LLMContextRecall(llm=evaluator_llm)
-            result = await recall.single_turn_ascore(sample)
-            return result
-
-        return asyncio.run(main())
-    except Exception as e:
-        log.error("Error during evaluating Contextual Recall", error=str(e))
-        return e
-
-
-def evaluate_faithfulness(query, response, retrieved_context):
-
-    try:
-        log.info('Evaluating Faithfulness')
-        sample = SingleTurnSample(
-            user_input=query,
-            response=response,
-            retrieved_contexts=retrieved_context,
-        )
-        async def main():
-            llm = get_llm()
-            evaluator_llm = LangchainLLMWrapper(llm)
-            faithfulness = Faithfulness(llm=evaluator_llm)
-            result = await faithfulness.single_turn_ascore(sample)
-            return result
-
-        return asyncio.run(main())
-    except Exception as e:
-        log.error("Error during evaluating faithfulness", error=str(e))
-        return e
-
-
-def evaluate_context_precision(query, response, retrieved_context):
-
-    try:
-        log.info('Evaluating Context Precision')
-        sample = SingleTurnSample(
-            user_input=query,
-            response=response,
-            retrieved_contexts=retrieved_context,
-        )
-        async def main():
-            llm = get_llm()
-            evaluator_llm = LangchainLLMWrapper(llm)
-            context_precision = LLMContextPrecisionWithoutReference(llm=evaluator_llm)
-            result = await context_precision.single_turn_ascore(sample)
-            return result
-
-        return asyncio.run(main())
-    except Exception as e:
-        log.error("Error during evaluating Context Precision", error=str(e))
-        return e
-
-
-def evaluate_response_relevancy(query, response, embeddings, retrieved_context):
-    # Hint: the only metric here that ALSO needs an embeddings wrapper, not
-    # just an LLM wrapper. Why would relevancy scoring need embeddings when
-    # faithfulness/precision/recall don't?
-    try:
-        sample = SingleTurnSample(
-            user_input=query,
-            response=response,
-            retrieved_contexts=retrieved_context
-        )
-
-        async def main():
-            llm = get_llm()
-            evaluator_llm = LangchainLLMWrapper(llm)
-            embedding_model = embeddings
-            evaluator_embeddings = LangchainEmbeddingsWrapper(embedding_model)
-            scorer = ResponseRelevancy(llm=evaluator_llm, embeddings=evaluator_embeddings)
-            result = await scorer.single_turn_ascore(sample)
-            return result
-        return asyncio.run(main())
-
-    except Exception as e:
-        log.error("Error during evaluating response relevancy", error=str(e))
-        return e
-
-
-def evaluate_llm_judge(query, response, retrieved_context):
-    # Hint: no SingleTurnSample, no RAGAS metric class — this is a plain
-    # prompt | llm | JsonOutputParser chain, same shape as chain.py's
-    # get_conversational_chain(). The "evaluator" is just another LLM call.
     llm = get_llm()
 
-    context_str = "\n".join([f"- {c}" for c in retrieved_context])
+    return LangchainLLMWrapper(llm)
+
+
+# ---------------------------------------------------------
+# 1. Context Precision
+# ---------------------------------------------------------
+
+async def evaluate_context_precision(
+    query,
+    response,
+    retrieved_context
+):
+
+    log.info("Evaluating Context Precision")
+
+    sample = SingleTurnSample(
+        user_input=query,
+        response=response,
+        retrieved_contexts=retrieved_context
+    )
+
+    evaluator_llm = get_evaluator_llm()
+
+    metric = LLMContextPrecisionWithoutReference(
+        llm=evaluator_llm
+    )
+
+    return await metric.single_turn_ascore(sample)
+
+
+# ---------------------------------------------------------
+# 2. Response Relevancy
+# ---------------------------------------------------------
+
+async def evaluate_response_relevancy(
+    query,
+    response,
+    embeddings,
+    retrieved_context
+):
+
+    log.info("Evaluating Response Relevancy")
+
+    sample = SingleTurnSample(
+        user_input=query,
+        response=response,
+        retrieved_contexts=retrieved_context
+    )
+
+    evaluator_llm = get_evaluator_llm()
+
+    evaluator_embeddings = LangchainEmbeddingsWrapper(
+        embeddings
+    )
+
+    metric = ResponseRelevancy(
+        llm=evaluator_llm,
+        embeddings=evaluator_embeddings
+    )
+
+    return await metric.single_turn_ascore(sample)
+
+
+# ---------------------------------------------------------
+# 3. Context Recall
+# ---------------------------------------------------------
+
+async def evaluate_context_recall(
+    query,
+    response,
+    retrieved_context,
+    reference_answer
+):
+
+    log.info("Evaluating Context Recall")
+
+    sample = SingleTurnSample(
+        user_input=query,
+        response=response,
+        reference=reference_answer,
+        retrieved_contexts=retrieved_context
+    )
+
+    evaluator_llm = get_evaluator_llm()
+
+    metric = LLMContextRecall(
+        llm=evaluator_llm
+    )
+
+    return await metric.single_turn_ascore(sample)
+
+
+# ---------------------------------------------------------
+# 4. Factual Correctness
+# ---------------------------------------------------------
+
+async def evaluate_factual_correctness(
+    query,
+    response,
+    reference_answer
+):
+
+    log.info("Evaluating Factual Correctness")
+
+    sample = SingleTurnSample(
+        user_input=query,
+        response=response,
+        reference=reference_answer
+    )
+
+    evaluator_llm = get_evaluator_llm()
+
+    metric = FactualCorrectness(
+        llm=evaluator_llm
+    )
+
+    return await metric.single_turn_ascore(sample)
+
+
+# ---------------------------------------------------------
+# 5. Faithfulness
+# ---------------------------------------------------------
+
+async def evaluate_faithfulness(
+    query,
+    response,
+    retrieved_context
+):
+
+    log.info("Evaluating Faithfulness")
+
+    sample = SingleTurnSample(
+        user_input=query,
+        response=response,
+        retrieved_contexts=retrieved_context
+    )
+
+    evaluator_llm = get_evaluator_llm()
+
+    metric = Faithfulness(
+        llm=evaluator_llm
+    )
+
+    return await metric.single_turn_ascore(sample)
+
+
+# ---------------------------------------------------------
+# 6. Custom LLM-as-a-Judge
+# ---------------------------------------------------------
+
+async def evaluate_llm_judge(
+    query,
+    response,
+    retrieved_context
+):
+
+    log.info("Evaluating using LLM Judge")
+
+    llm = get_llm()
+
+    context_str = "\n".join(
+        [f"- {context}" for context in retrieved_context]
+    )
 
     prompt = PromptTemplate(
-        input_variables=["query", "context_str", "response"],
+        input_variables=[
+            "query",
+            "context_str",
+            "response"
+        ],
         template="""
-                You are an expert Evaluator. Your task is to judge the RELEVANCY of an Answer based on a User Question and the Provided Context.
+You are an expert RAG evaluation judge.
 
-                ### Evaluation Criteria:
-                1. **Directness**: Does the answer directly address the user's question?
-                2. **Grounding**: Is the answer supported by the retrieved context?
-                3. **Completeness**: Does it provide all necessary details found in the context to answer the question?
-                4. **Precision**: Does it avoid irrelevant fluff?
+Evaluate the generated answer using the following criteria:
 
-                ### Input Data:
-                **User Question:** {query}
-                **Retrieved Context:** {context_str}
-                **Generated Answer:** {response}
+1. Directness:
+   Does the answer address the user's question?
 
-                ### Output Format:
-                You must respond ONLY in the following JSON format:
-                {{
-                    "relevancy_percentage": <integer between 0 and 100>,
-                    "explanation": "<short 2-sentence explanation>",
-                    "hallucination_detected": <true/false>
-                }}
-                """
-                    )
+2. Grounding:
+   Is the answer supported by the retrieved context?
 
-    try:
-        # chain = prompt | llm | StrOutputParser()
-        chain = prompt | llm | JsonOutputParser()
+3. Completeness:
+   Does it include the relevant information available in the context?
 
-        raw_result = chain.invoke({
+4. Precision:
+   Does it avoid irrelevant information?
+
+User Question:
+{query}
+
+Retrieved Context:
+{context_str}
+
+Generated Answer:
+{response}
+
+Return ONLY valid JSON:
+
+{{
+    "relevancy_percentage": 0,
+    "explanation": "Brief explanation",
+    "hallucination_detected": false
+}}
+"""
+    )
+
+    chain = prompt | llm | JsonOutputParser()
+
+    return await chain.ainvoke(
+        {
             "query": query,
             "context_str": context_str,
             "response": response
-        })
-
-        return raw_result
-
-    except Exception as e:
-        log.error("Error during evaluating llm-as-a-judge", error=str(e))
-        return e
+        }
+    )

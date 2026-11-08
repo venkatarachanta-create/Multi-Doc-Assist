@@ -137,6 +137,10 @@ Live/Production_files/data/faiss_index_*/
 
 Live/Production_files/logs/
 
+# RAG evaluation runtime outputs
+Live/Production_files/data/evaluation/*_results.json
+Live/Production_files/data/evaluation/comparative_benchmark*.json
+
 # Python bytecode and cache (all directories)
 
 **/**pycache**/

@@ -1,0 +1,137 @@
+[
+  {
+    "id": "SJ01",
+    "question": "What is the grace period for monthly and other premium payment modes?",
+    "reference_answer": "The grace period is 15 days for monthly premium payment mode and 30 days for other available premium payment modes.",
+    "source_document": "HDFC-Life-Sampoorna-Jeevan-101N158V04-Policy-Document (1).pdf",
+    "source_page": 3,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "SJ02",
+    "question": "How is the Sum Assured on Death calculated?",
+    "reference_answer": "It is the highest of the applicable multiple of Annualized Premium, Minimum Guaranteed Sum Assured on Maturity, the absolute amount assured on death, or 105% of Total Premiums Paid up to the date of death. The applicable premium multiple depends on the Life Assured's entry age.",
+    "source_document": "HDFC-Life-Sampoorna-Jeevan-101N158V04-Policy-Document (1).pdf",
+    "source_page": 6,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "SJ03",
+    "question": "What are the two maturity age variants available under Sampoorna Jeevan?",
+    "reference_answer": "The variants are Sampoorna Jeevan 75 and Sampoorna Jeevan 100. Maturity is payable at the end of the Policy Year in which the Life Assured attains age 75 or 100, respectively.",
+    "source_document": "HDFC-Life-Sampoorna-Jeevan-101N158V04-Policy-Document (1).pdf",
+    "source_page": 5,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "SJ04",
+    "question": "Under what conditions may a lapsed Sampoorna Jeevan policy be revived?",
+    "reference_answer": "A lapsed policy may be revived for full benefits within five years from the due date of the first unpaid premium, subject to Company approval and the applicable underwriting policy. The policy must not have been surrendered for cash, no claim must have arisen, evidence of insurability and health must be provided if required, and arrears of premiums plus applicable interest or revival charges must be paid.",
+    "source_document": "HDFC-Life-Sampoorna-Jeevan-101N158V04-Policy-Document (1).pdf",
+    "source_page": 13,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "SJ05",
+    "question": "What happens to future Survival Benefit instalments if the Life Assured dies after Survival Benefit payouts begin?",
+    "reference_answer": "Future Survival Benefit instalments, if any, cease and the Death Benefit becomes payable. Survival Benefits paid after the date of death, if any, are deducted from the Death Benefit.",
+    "source_document": "HDFC-Life-Sampoorna-Jeevan-101N158V04-Policy-Document (1).pdf",
+    "source_page": 7,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "GT01",
+    "question": "What is an accident according to the Group Term Life policy?",
+    "reference_answer": "An accident is a sudden, unforeseen and involuntary event caused by external, visible and violent means.",
+    "source_document": "HDFC-Life-Group-Term-Life-Policy.pdf",
+    "source_page": 7,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "GT02",
+    "question": "How does the Group Term Life policy define accidental death?",
+    "reference_answer": "Accidental death covers death that results directly from an accident and occurs within 90 days of the date of the accident.",
+    "source_document": "HDFC-Life-Group-Term-Life-Policy.pdf",
+    "source_page": 7,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "GT03",
+    "question": "What does Active Service mean under an employer-employee relationship?",
+    "reference_answer": "It refers to an employee employed full-time on a permanent basis who performs the regular duties of the job in the customary manner on a scheduled working day, either at the policyholder's business establishment or at another location to which the business requires the employee to travel. The policy also specifies when an employee is considered in Active Service on a non-working day.",
+    "source_document": "HDFC-Life-Group-Term-Life-Policy.pdf",
+    "source_page": 7,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "GT04",
+    "question": "What is the free-look period for the Master Policyholder?",
+    "reference_answer": "The Master Policyholder has 15 days from receipt of the Master Policy document to review it. If the policy is sourced through Direct Sales, the period is 30 days.",
+    "source_document": "HDFC-Life-Group-Term-Life-Policy.pdf",
+    "source_page": 3,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "GT05",
+    "question": "What is an Affinity Group in insurance terminology?",
+    "reference_answer": "An Affinity Group is a group consisting of persons who assemble together with a commonality of purpose or engage in a common economic activity.",
+    "source_document": "HDFC-Life-Group-Term-Life-Policy.pdf",
+    "source_page": 7,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "SP01",
+    "question": "What type of insurance plan is HDFC Life Sanchay Plus?",
+    "reference_answer": "HDFC Life Sanchay Plus is a non-participating, non-linked savings insurance plan.",
+    "source_document": "HDFC-Life-Sanchay-Plus-Life-Long-Income-Option-101N134V19-Policy-Document.pdf",
+    "source_page": 1,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "SP02",
+    "question": "When does the Guaranteed Income on Maturity begin under Sanchay Plus?",
+    "reference_answer": "Subject to survival of the Life Assured until the Maturity Date and payment of all premiums due, Guaranteed Income on Maturity starts from the year immediately after the Policy Term and is paid at the selected Income Payout Frequency during the Payout Period.",
+    "source_document": "HDFC-Life-Sanchay-Plus-Life-Long-Income-Option-101N134V19-Policy-Document.pdf",
+    "source_page": 7,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "SP03",
+    "question": "What happens at the end of the Sanchay Plus payout period?",
+    "reference_answer": "At the end of the Payout Period, the policy terminates by returning the Total Premiums Paid.",
+    "source_document": "HDFC-Life-Sanchay-Plus-Life-Long-Income-Option-101N134V19-Policy-Document.pdf",
+    "source_page": 7,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "SP04",
+    "question": "How is the Death Benefit calculated if the Life Assured dies during the Sanchay Plus Policy Term?",
+    "reference_answer": "Provided all premiums due have been paid, the lump-sum Death Benefit equals the highest of: 10 times the Annualized Premium or 1.25 times the Single Premium; 105% of Total Premiums Paid; premiums paid accumulated at 5% per annum compounded annually; Guaranteed Sum Assured on Maturity; or the absolute amount assured on death specified in the Policy Schedule.",
+    "source_document": "HDFC-Life-Sanchay-Plus-Life-Long-Income-Option-101N134V19-Policy-Document.pdf",
+    "source_page": 8,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  },
+  {
+    "id": "SP05",
+    "question": "What happens if the Life Assured dies during the Sanchay Plus payout period?",
+    "reference_answer": "Provided all premiums due have been paid, the Nominee continues receiving Guaranteed Income on Maturity at the specified Income Payout Frequency for the remaining Payout Period. The Nominee may instead choose to receive the future income as a lump sum, calculated as the present value of future payouts using the applicable prevailing-interest-rate discounting method.",
+    "source_document": "HDFC-Life-Sanchay-Plus-Life-Long-Income-Option-101N134V19-Policy-Document.pdf",
+    "source_page": 8,
+    "embedding_model": "OpenAI (text-embedding-3-small)",
+    "retriever_type": "FAISS Retriever"
+  }
+]
