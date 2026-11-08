@@ -1,64 +1,275 @@
-# Purpose:
-# Learn how document chunks are stored in a FAISS vector index.
-#
-# What to focus on:
-# - Why FAISS is used for similarity search
-# - How the index is created the first time
-# - How the existing index is updated with new chunks
-#
-# TODO:
-# 1. Trace the difference between the first save and later updates.
-# 2. Explain why the embedding dimension must match the FAISS index.
-# 3. Describe why the index path changes with the embedding model.
-# 4. What would happen below WITHOUT the empty-chunks guard, if loader.py
-#    returned [] for a file (e.g. the empty-file or unsupported-type cases
-#    in loader.py's _load_single_file)? Trace what add_texts([]) or
-#    add_documents(documents=[]) would do, and why "warn and return early"
-#    is safer than letting that happen silently.
+from pathlib import Path
+
+import faiss
 
 from langchain_community.vectorstores import FAISS
-from src.backend.logger import GLOBAL_LOGGER as log
-import faiss
 from langchain_community.docstore.in_memory import InMemoryDocstore
+
+from src.backend.logger import GLOBAL_LOGGER as log
 from src.backend.rag.embeddings import get_embeddings
 from src.backend.core.config import settings
 
 
+# --------------------------------------------------
+# Find existing document IDs belonging to a source
+# --------------------------------------------------
+
+def get_existing_document_ids(vector_store, source_id: str):
+    """
+    Find all FAISS document IDs belonging to a source document.
+    """
+
+    existing_ids = []
+
+    for doc_id in vector_store.index_to_docstore_id.values():
+
+        document = vector_store.docstore.search(doc_id)
+
+        if (
+            not isinstance(document, str)
+            and document.metadata.get("source_id") == source_id
+        ):
+            existing_ids.append(doc_id)
+
+    return existing_ids
+
+
+# --------------------------------------------------
+# Validate existing FAISS index metadata
+# --------------------------------------------------
+
+def validate_existing_index(vector_store):
+    """
+    Ensure the existing FAISS index follows the current
+    source-aware metadata structure.
+
+    Prevents legacy documents from being mixed with
+    newly indexed documents.
+    """
+
+    existing_documents = vector_store.docstore._dict
+
+    legacy_documents = []
+
+    required_fields = [
+        "source_id",
+        "chunk_id",
+        "file_hash"
+    ]
+
+    for doc_id, document in existing_documents.items():
+
+        missing_fields = [
+            field
+            for field in required_fields
+            if not document.metadata.get(field)
+        ]
+
+        if missing_fields:
+            legacy_documents.append({
+                "doc_id": doc_id,
+                "missing_fields": missing_fields
+            })
+
+    if legacy_documents:
+
+        raise ValueError(
+            f"Existing FAISS index contains "
+            f"{len(legacy_documents)} documents with legacy "
+            "or incomplete metadata. Rebuild this index "
+            "before adding new documents."
+        )
+
+    log.info(
+        "Existing FAISS index metadata validation passed",
+        total_documents=len(existing_documents)
+    )
+
+
+# --------------------------------------------------
+# Validate incoming chunks
+# --------------------------------------------------
+
+def validate_chunks(chunks):
+
+    if not chunks:
+        raise ValueError("No document chunks provided.")
+
+    required_fields = [
+        "source_id",
+        "file_hash",
+        "chunk_id"
+    ]
+
+    source_id = chunks[0].metadata.get("source_id")
+    file_hash = chunks[0].metadata.get("file_hash")
+
+    if not source_id or not file_hash:
+        raise ValueError(
+            "Missing source_id or file_hash in chunk metadata."
+        )
+
+    chunk_ids = []
+
+    for index, chunk in enumerate(chunks):
+
+        for field in required_fields:
+
+            if not chunk.metadata.get(field):
+                raise ValueError(
+                    f"Chunk {index} is missing required metadata: {field}"
+                )
+
+        if (
+            chunk.metadata["source_id"] != source_id
+            or chunk.metadata["file_hash"] != file_hash
+        ):
+            raise ValueError(
+                "Chunks contain inconsistent document metadata."
+            )
+
+        chunk_ids.append(chunk.metadata["chunk_id"])
+
+    if len(chunk_ids) != len(set(chunk_ids)):
+        raise ValueError(
+            "Duplicate chunk IDs detected in incoming documents."
+        )
+
+    return source_id, file_hash, chunk_ids
+
+
+# --------------------------------------------------
+# Main indexing function
+# --------------------------------------------------
+
 def index_docs(chunks, embedding_model: str):
-    # Hint: this function both creates a new index and updates an existing one.
-    #
-    # Think about:
-    # - What happens when the index already exists?
-    # - Why do we use a separate folder per embedding model?
-    if not chunks or len(chunks) == 0:
-        log.warning("No chunks to index", embedding_model=embedding_model)
+
+    if not chunks:
+        log.warning(
+            "No chunks to index",
+            embedding_model=embedding_model
+        )
         return
 
+    # Validate incoming document chunks
+    source_id, file_hash, chunk_ids = validate_chunks(chunks)
+
     embeddings = get_embeddings(embedding_model)
+
     index_path = f"{settings.INDEX_PATH}_{embedding_model}"
+    index_directory = Path(index_path)
 
-    try:
-        vector_store = FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
-        log.info("Loading existing FAISS index")
-        new_texts = [doc.page_content for doc in chunks]
-        vector_store.add_texts(new_texts)
-        vector_store.save_local(index_path)
-        log.info("FAISS index updated and saved", index_path=index_path)
+    # Check whether an existing FAISS index is available
+    index_exists = (
+        index_directory.is_dir()
+        and (index_directory / "index.faiss").is_file()
+        and (index_directory / "index.pkl").is_file()
+    )
 
-    except Exception:
-        # Hint: this branch handles the first-time setup.
-        log.info(f"FAISS index not found for {embedding_model}, Creating a new FAISS index")
+    # --------------------------------------------------
+    # Case 1: Load existing FAISS index
+    # --------------------------------------------------
+
+    if index_exists:
+
+        log.info(
+            "Loading existing FAISS index",
+            index_path=index_path
+        )
+
+        vector_store = FAISS.load_local(
+            index_path,
+            embeddings,
+            allow_dangerous_deserialization=True
+        )
+
+        # Validate metadata before modifying the index
+        validate_existing_index(vector_store)
+
+        # Find existing chunks belonging to this document
+        existing_ids = get_existing_document_ids(
+            vector_store,
+            source_id
+        )
+
+        # Check whether the uploaded document is unchanged
+        if existing_ids:
+
+            existing_document = vector_store.docstore.search(
+                existing_ids[0]
+            )
+
+            existing_hash = existing_document.metadata.get(
+                "file_hash"
+            )
+
+            if existing_hash == file_hash:
+
+                log.info(
+                    "Document already indexed. Skipping duplicate.",
+                    source_id=source_id,
+                    file_hash=file_hash
+                )
+
+                return
+
+            # Updated document: remove its old chunks
+            vector_store.delete(ids=existing_ids)
+
+            log.info(
+                "Previous document version deleted",
+                source_id=source_id,
+                deleted_chunks=len(existing_ids)
+            )
+
+    # --------------------------------------------------
+    # Case 2: Create a new FAISS index
+    # --------------------------------------------------
+
+    else:
+
+        log.info(
+            "Creating new FAISS index",
+            embedding_model=embedding_model
+        )
+
+        index_directory.mkdir(
+            parents=True,
+            exist_ok=True
+        )
 
         sample_embedding = embeddings.embed_query("hello")
-        index = faiss.IndexFlatL2(len(sample_embedding))
+
+        index = faiss.IndexFlatL2(
+            len(sample_embedding)
+        )
 
         vector_store = FAISS(
             embedding_function=embeddings,
             index=index,
             docstore=InMemoryDocstore(),
-            index_to_docstore_id={},
+            index_to_docstore_id={}
         )
 
-        vector_store.add_documents(documents=chunks)
-        vector_store.save_local(index_path)
-        log.info("FAISS index created and saved at ", index_path=index_path)
+    # --------------------------------------------------
+    # Add document chunks
+    # --------------------------------------------------
+
+    vector_store.add_documents(
+        documents=chunks,
+        ids=chunk_ids
+    )
+
+    # --------------------------------------------------
+    # Persist FAISS index
+    # --------------------------------------------------
+
+    vector_store.save_local(index_path)
+
+    log.info(
+        "FAISS indexing completed successfully",
+        source_id=source_id,
+        file_hash=file_hash,
+        added_chunks=len(chunks),
+        index_path=index_path
+    )
