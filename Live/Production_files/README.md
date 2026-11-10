@@ -1,35 +1,139 @@
-# Student Files for Week 7 Live Session
+# RAG Multi-Document Assist — Technical Developer Guide
 
-A complete, runnable mirror of `../src/` — reorganized so you can see the
-**whole project flow**, not just the RAG building blocks in isolation. Every
-file has a "Student Guide" header explaining what to focus on, plus inline
-`# Hint:` comments at the real decision points and a `TODO for students`
-section with questions to work through.
+## 1. Project Overview
 
-## How this is different from just reading `../src/`
+RAG Multi-Document Assist is a document-based question-answering application built using Retrieval-Augmented Generation (RAG).
 
-Every file here is the **real, working code** — not a stripped
-fill-in-the-blank exercise. Read the header comment first, then the hints,
-then try the TODOs. Some TODOs reference bugs that were **actually hit**
-while building this project (not hypothetical) — those are called out
-explicitly, e.g. the frontend crash from a backend call returning `None`,
-or the missing-`OPENAI_MODEL` 400 error.
+The application allows users to upload PDF documents, process and index their content, retrieve relevant information, and generate answers grounded in the uploaded documents.
 
-## The project flow, in three architectures
+The system supports multiple embedding models and retrieval strategies, document-level filtering, metadata validation, and offline evaluation using RAGAS.
 
-### 1. Application architecture — code layers
+### Key Capabilities
 
-Each layer only ever calls the layer directly below it. That's what makes a
-bug findable: is the *building block* wrong, or the *orchestration*?
+- PDF document ingestion and text extraction.
+- Configurable document chunking.
+- OpenAI and Cohere embedding models.
+- FAISS vector storage.
+- Four retrieval strategies.
+- Source-aware document retrieval.
+- Context deduplication.
+- Context-grounded answer generation.
+- Offline RAGAS evaluation.
+- Comparative embedding-model benchmarking.
+- FastAPI backend and Streamlit frontend.
+- Docker-based application packaging.
+
+---
+
+## 2. Technology Stack
+
+| Component | Technology |
+|---|---|
+| Programming language | Python |
+| LLM | OpenAI |
+| Embedding models | OpenAI, Cohere |
+| LLM orchestration | LangChain |
+| Vector store | FAISS |
+| Retrieval strategies | Similarity, MMR, Multi-Query, Contextual Compression |
+| Reranking | Cohere Rerank |
+| Evaluation | RAGAS, LLM-as-a-Judge |
+| Backend | FastAPI |
+| Frontend | Streamlit |
+| Database / vector storage | FAISS |
+| Containerization | Docker |
+| Logging | Custom application logger |
+
+---
+
+## 3. Project Directory Structure
+
+```text
+Production_files/
+│
+├── src/
+│   ├── backend/
+│   │   ├── api/
+│   │   │   ├── health.py
+│   │   │   └── routes.py
+│   │   │
+│   │   ├── core/
+│   │   │   └── config.py
+│   │   │
+│   │   ├── evaluation/
+│   │   │   ├── ragas_eval.py
+│   │   │   └── evaluation_runner.py
+│   │   │
+│   │   ├── logger/
+│   │   │   └── customer_logger.py
+│   │   │
+│   │   ├── rag/
+│   │   │   ├── loader.py
+│   │   │   ├── splitter.py
+│   │   │   ├── embeddings.py
+│   │   │   ├── faiss_store.py
+│   │   │   ├── retriever_config.py
+│   │   │   ├── mmr.py
+│   │   │   ├── compression.py
+│   │   │   ├── multi_query_retriever.py
+│   │   │   ├── deduplicator.py
+│   │   │   ├── chain.py
+│   │   │   └── llm.py
+│   │   │
+│   │   ├── services/
+│   │   │   ├── ingestion_service.py
+│   │   │   └── retrieval_service.py
+│   │   │
+│   │   └── main.py
+│   │
+│   ├── frontend/
+│   │   ├── app.py
+│   │   └── utils.py
+│   │
+│   └── shared/
+│       └── schemas.py
+│
+├── data/
+│   ├── Input_files/
+│   ├── evaluation/
+│   │   └── evaluation_dataset.json
+│   └── faiss_index_*/
+│
+├── tests/
+│   └── integration/
+│       ├── test_all_retrievers.py
+│       ├── test_chain.py
+│       └── test_source_filter.py
+│
+├── Dockerfile
+├── requirements.txt
+├── .env
+└── README.md
+```
+
+**Note:** Runtime indexes, uploaded documents, credentials, and generated evaluation results are local runtime artifacts. They should not be committed to GitHub.
+
+---
+
+## 4. System Architecture
+
+The application follows a layered architecture that separates the frontend, API, business orchestration, and RAG components.
+
+### 4.1 Application Architecture
 
 ```mermaid
 flowchart TD
-    A["🖥️ frontend/<br/>app.py — Streamlit UI"]
-    B["🔌 backend/api/<br/>routes.py — POST /upload · POST /retrieve"]
-    C["⚙️ backend/services/ — orchestrators<br/>ingestion_service.py · retrieval_service.py"]
-    D["🧱 backend/rag/ — building blocks<br/>loader · splitter · embeddings · faiss_store<br/>mmr · compression · multi_query_retriever · deduplicator<br/>chain · llm"]
+    A["Streamlit Frontend"]
+    B["FastAPI API Layer"]
+    C["Service Layer"]
+    D["RAG Components"]
+    E["FAISS Vector Store"]
+    F["OpenAI / Cohere APIs"]
 
-    A -->|HTTP request| B --> C --> D
+    A -->|HTTP Request| B
+    B --> C
+    C --> D
+    D --> E
+    D --> F
 
     style A fill:#EAF5F0,stroke:#1E8C7E,color:#1B4D45
     style B fill:#EAF5F0,stroke:#1E8C7E,color:#1B4D45
@@ -37,141 +141,584 @@ flowchart TD
     style D fill:#FDF3E0,stroke:#E8A33D,color:#8A5A00
 ```
 
-### 2. Runtime architecture — two processes, two ports
+### 4.2 Runtime Architecture
+
+The application runs as two independent processes.
 
 ```mermaid
 flowchart TB
-    USER(["👤 You, in a browser"]) -->|"http://localhost:8501"| STREAMLIT
-    STREAMLIT["Streamlit<br/>frontend/app.py"] -->|"http://localhost:8000<br/>(HTTP, not an import)"| FASTAPI["FastAPI<br/>backend/main.py"]
-    FASTAPI --> SERVICES["services/"] --> RAG["rag/"]
+    USER(["User / Browser"])
+    UI["Streamlit Frontend<br/>Port 8501"]
+    API["FastAPI Backend<br/>Port 8000"]
+    SERVICES["Backend Services"]
+    RAG["RAG Components"]
+    VECTOR["FAISS Index"]
+    LLM["LLM / Embedding APIs"]
 
-    style STREAMLIT fill:#EAF5F0,stroke:#1E8C7E,color:#1B4D45
-    style FASTAPI fill:#FDF3E0,stroke:#E8A33D,color:#8A5A00
+    USER --> UI
+    UI -->|HTTP| API
+    API --> SERVICES
+    SERVICES --> RAG
+    RAG --> VECTOR
+    RAG --> LLM
 ```
 
-> The frontend never imports `rag/` or `services/` directly — it makes a
-> real HTTP call, the same way an external client would. See
-> `src/frontend/utils.py`'s student notes for why that boundary is
-> deliberate, and why `localhost` is correct there (not a bug).
+The frontend communicates with the backend through HTTP requests. It does not directly invoke the RAG components.
 
-### 3. The request flow — what happens when you click "Ask"
+### 4.3 Retrieval Request Flow
 
 ```mermaid
 sequenceDiagram
-    participant U as You
-    participant F as frontend/app.py
-    participant A as api/routes.py
-    participant S as services/retrieval_service.py
-    participant R as rag/ (mmr, compression, chain, llm...)
-    participant E as evaluation/ragas_eval.py
+    participant U as User
+    participant F as Streamlit
+    participant A as FastAPI
+    participant S as Retrieval Service
+    participant R as Retriever
+    participant V as FAISS
+    participant L as LLM
 
-    U->>F: Click "🔍 Get Answer"
+    U->>F: Submit question
     F->>A: POST /retrieve
-    A->>S: retrieve_answer(question, model, retriever_type)
-    S->>R: retrieve chunks (chosen strategy) → dedupe → generate
-    R-->>S: answer + retrieved context
-    S->>E: score 7 RAGAS/LLM-judge metrics
-    E-->>S: evaluation_metric dict
-    S-->>A: (answer, answer_texts, evaluation_metric)
+    A->>S: retrieve_answer()
+    S->>R: Select retrieval strategy
+    R->>V: Search relevant chunks
+    V-->>R: Retrieved documents
+    R-->>S: Retrieved context
+    S->>S: Deduplicate and validate source
+    S->>L: Generate grounded answer
+    L-->>S: Generated answer
+    S-->>A: Answer and retrieved context
     A-->>F: QueryResponse
-    F-->>U: Answer + evaluation metrics rendered
+    F-->>U: Display answer
 ```
 
-## Folder layout
+Offline evaluation is performed separately through the evaluation runner. It is not part of the normal online retrieval request.
 
+---
+
+## 5. Core Components
+
+| Module | Responsibility |
+|---|---|
+| `loader.py` | Loads and extracts PDF content |
+| `splitter.py` | Splits documents into manageable chunks |
+| `embeddings.py` | Initializes embedding models |
+| `faiss_store.py` | Creates, updates, and validates FAISS indexes |
+| `retriever_config.py` | Configures FAISS retrieval and source filters |
+| `mmr.py` | Implements Maximum Marginal Relevance retrieval |
+| `compression.py` | Implements contextual compression and reranking |
+| `multi_query_retriever.py` | Generates alternative search queries |
+| `deduplicator.py` | Removes duplicate retrieved documents |
+| `chain.py` | Defines the context-grounded generation prompt |
+| `llm.py` | Initializes the language model |
+| `ingestion_service.py` | Coordinates document ingestion |
+| `retrieval_service.py` | Coordinates retrieval and answer generation |
+| `ragas_eval.py` | Implements evaluation metrics |
+| `evaluation_runner.py` | Runs offline benchmark experiments |
+
+---
+
+## 6. Document Ingestion Workflow
+
+Document ingestion converts uploaded PDFs into searchable vector representations.
+
+### Processing Steps
+
+1. User uploads a PDF through the frontend.
+2. FastAPI receives the document.
+3. The ingestion service loads the PDF.
+4. Extracted content is divided into chunks.
+5. The selected embedding model generates vectors.
+6. Metadata is attached to each chunk.
+7. FAISS indexing validates and stores the document chunks.
+
+### Document Metadata
+
+The implementation uses important metadata fields:
+
+| Metadata | Purpose |
+|---|---|
+| `source_id` | Identifies the source document |
+| `chunk_id` | Uniquely identifies a document chunk |
+| `file_hash` | Identifies the uploaded file version |
+| `source` | Stores the original source filename |
+| `page` | Identifies the source page |
+
+### Why Metadata Matters
+
+- `source_id` enables document-specific retrieval.
+- `chunk_id` supports unique chunk identification.
+- `file_hash` helps identify unchanged or updated documents.
+- `source` and `page` support document traceability.
+
+The FAISS indexing layer validates required metadata before storing documents.
+
+---
+
+## 7. Retrieval Strategies
+
+The application supports four retrieval strategies.
+
+### 7.1 FAISS Similarity Retrieval
+
+Uses vector similarity to identify the most relevant document chunks.
+
+The implementation supports:
+
+- Global document retrieval.
+- Source-specific retrieval.
+- Configurable retrieval count.
+
+### 7.2 Maximum Marginal Relevance (MMR)
+
+MMR balances relevance and diversity.
+
+Instead of returning only highly similar chunks, MMR attempts to reduce redundancy while maintaining relevance.
+
+### 7.3 Contextual Compression
+
+Contextual compression retrieves an initial set of documents and applies Cohere reranking to prioritize relevant results.
+
+Current reranker configuration:
+
+- Model: `rerank-v3.5`
+- Initial retrieval count: 20
+- Final reranked context count: 5
+
+### 7.4 Multi-Query Retrieval
+
+Multi-query retrieval generates alternative versions of the original question.
+
+These queries improve the chances of finding relevant content expressed using different terminology.
+
+The implementation includes the original query alongside generated alternatives.
+
+### Global vs Source-Specific Retrieval
+
+| Retrieval mode | Behaviour |
+|---|---|
+| Global | Searches across all indexed documents |
+| Source-specific | Restricts retrieval to the selected document using `source_id` |
+
+Source-specific retrieval is particularly useful when users upload multiple policy documents and want answers restricted to one selected policy.
+
+---
+
+## 8. Context Processing and Answer Generation
+
+After retrieval, the system processes the returned documents before sending context to the LLM.
+
+### Processing Steps
+
+1. Retrieve relevant chunks.
+2. Remove duplicate documents.
+3. Validate source identity when a source filter is supplied.
+4. Combine retrieved content into context.
+5. Pass the context and question to the conversational chain.
+6. Generate the final answer.
+
+### Context-Grounded Generation
+
+The generation prompt is designed to:
+
+- Answer using the supplied context.
+- Avoid unsupported external information.
+- Preserve important numbers and conditions.
+- Avoid guessing when information is unavailable.
+- Return a clear fallback when the answer is absent.
+
+Expected fallback:
+
+```text
+Answer is not available in the provided context.
 ```
-student_files/
-├── data/Input_files/     two sample PDFs to test with
-├── .env.example          copy to .env and fill in your keys
-├── Dockerfile, entrypoint.sh, .dockerignore, requirements.txt
-├── deploy/azure/         deploy.sh · teardown.sh · README.md · bicep
-├── .github/workflows/    CI/CD (build → push → redeploy on git push)
-└── src/
-    ├── shared/schemas.py
-    ├── frontend/{app.py, utils.py}
-    └── backend/
-        ├── main.py, core/config.py
-        ├── api/{routes.py, health.py}
-        ├── rag/            (10 files — the strategies + building blocks)
-        ├── services/       (ingestion_service.py, retrieval_service.py)
-        ├── evaluation/ragas_eval.py
-        └── logger/
+
+This approach is particularly important for policy documents, where incorrect numerical values or omitted conditions can change the meaning of an answer.
+
+---
+
+## 9. RAG Evaluation Framework
+
+Evaluation is performed offline using the evaluation runner.
+
+The framework compares OpenAI and Cohere embedding configurations using a common evaluation dataset.
+
+### Evaluation Architecture
+
+```mermaid
+flowchart TD
+    A["Evaluation Dataset"]
+    B["OpenAI Embedding Experiment"]
+    C["Cohere Embedding Experiment"]
+    D["FAISS Retrieval"]
+    E["Answer Generation"]
+    F["RAGAS Metrics"]
+    G["Comparative Report"]
+
+    A --> B
+    A --> C
+    B --> D
+    C --> D
+    D --> E
+    E --> F
+    F --> G
 ```
 
-This mirrors `../src/` exactly — once you understand a file here, you
-already understand its production counterpart.
+### Evaluation Metrics
 
-## Suggested reading order
+| Metric | What it measures |
+|---|---|
+| Context Precision | Relevance of retrieved context |
+| Response Relevancy | Relevance of the generated answer to the question |
+| Context Recall | Whether the retrieved context supports the reference answer |
+| Factual Correctness | Agreement between the generated answer and reference answer |
+| Faithfulness | Whether the generated answer is supported by retrieved context |
+| Hallucination | Derived score: `1 - Faithfulness` |
+| LLM Judge | Custom LLM-based answer assessment |
 
-Matches the order the pipeline actually runs, bottom-up:
+### Comparative Benchmark
 
-1. **Foundations** — `src/backend/core/config.py`, `src/backend/rag/embeddings.py`, `src/backend/rag/llm.py`
-2. **Data prep** — `src/backend/rag/loader.py`, `src/backend/rag/splitter.py`
-3. **Storage** — `src/backend/rag/faiss_store.py`
-4. **Retrieval strategies** — `src/backend/rag/mmr.py`, `compression.py`, `multi_query_retriever.py`, `deduplicator.py`
-5. **Generation** — `src/backend/rag/chain.py`
-6. **Evaluation** — `src/backend/evaluation/ragas_eval.py`
-7. **Orchestration** — `src/backend/services/ingestion_service.py`, `retrieval_service.py`
-8. **Entry points** — `src/backend/api/routes.py`, `health.py`, `main.py`, `src/frontend/app.py`, `utils.py`
+The evaluation dataset contains 15 questions across three HDFC Life policy documents.
 
-Steps 1-7 are "how the theory becomes maintainable software." Step 8 is
-"how it becomes a running app."
+The experiments compare:
 
-## Running it
+- OpenAI `text-embedding-3-small`
+- Cohere `embed-english-v3.0`
 
-Uses the same Python environment as `../` (the main `Live/` project) —
-just run the commands **from inside this `student_files/` folder**, not
-from `Live/`, so `src` resolves to *this* copy instead of the production one.
+Both experiments use the same evaluation embedding configuration for Response Relevancy, keeping that evaluation component consistent.
+
+The evaluation runner generates individual model reports and a comparative benchmark report.
+
+**Important:** Evaluation scores are experimental measurements from the current dataset and configuration. They should not be treated as universal performance guarantees.
+
+---
+
+## 10. Installation and Execution
+
+Run commands from the `Live/Production_files/` directory unless stated otherwise.
+
+### 10.1 Activate the Virtual Environment
+
+If the existing project virtual environment is located at the repository root:
+
+PowerShell:
+
+```powershell
+cd D:\AI Engineer practice\RAG-Multi-Document-Assist
+.\.venv\Scripts\Activate.ps1
+cd Live\Production_files
+```
+
+### 10.2 Install Dependencies
 
 ```bash
-# From student_files/, using the same venv already set up for Live/:
+pip install -r requirements.txt
+```
 
-# 1. Set up your secrets (separate from Live/src/backend/.env — this one
-#    lives here because config.py reads ".env" relative to your cwd)
-copy .env.example .env        # Windows
-cp .env.example .env          # Mac/Linux
-# then edit .env with your real API keys
+### 10.3 Configure Environment Variables
 
-# 2. Run the backend (terminal 1)
+Create or update the `.env` file with the required credentials.
+
+Example:
+
+```env
+OPENAI_API_KEY=your_openai_api_key
+COHERE_API_KEY=your_cohere_api_key
+OPENAI_MODEL=gpt-4o-mini
+```
+
+Use the actual model configuration expected by the application.
+
+Never commit `.env` or expose API keys in source code.
+
+### 10.4 Start FastAPI
+
+From `Live/Production_files/`:
+
+```bash
 uvicorn src.backend.main:app --host 0.0.0.0 --port 8000
+```
 
-# 3. Run the frontend (terminal 2)
+API documentation:
+
+```text
+http://localhost:8000/docs
+```
+
+### 10.5 Start Streamlit
+
+Open another terminal, activate the same environment, and run:
+
+```bash
+cd Live/Production_files
 python -m streamlit run src/frontend/app.py
 ```
 
-Open the URL Streamlit prints (usually `http://localhost:8501`), upload a
-sample PDF from `data/Input_files/`, click **Ingest Document**, then ask a
-question.
+Open:
 
-There are two sample PDFs on purpose — upload one, ask a question, then
-upload the second one too. This is the actual regression test for
-`ingestion_service.py`'s TODO #4: watch the chunk count returned for the
-2nd upload — it should be just that file's chunks, not both files' chunks
-added together. If a future change reintroduces the whole-directory reload
-bug, this is how you'd notice.
-
-## Containerizing and deploying this copy
-
-`student_files/` is a fully self-contained copy for this too — its own
-`Dockerfile`, `entrypoint.sh`, `.dockerignore`, and `deploy/azure/` (build
-+ push + deploy scripts, teardown, CI/CD workflow), separate from `../`'s.
-Build and run it exactly like the main project, just from this folder:
-
-```bash
-# from student_files/
-docker build -t multidoc-assist-student .
-docker run -p 8080:8080 -e OPENAI_API_KEY=$OPENAI_API_KEY -e COHERE_API_KEY=$COHERE_API_KEY -e OPENAI_MODEL=gpt-4o-mini multidoc-assist-student
+```text
+http://localhost:8501
 ```
 
-Then `deploy/azure/deploy.sh` walks through the same resource group → ACR →
-App Service → app settings flow as the main project's — see
-`deploy/azure/README.md` here for the full walkthrough, including the
-troubleshooting table for the real issues hit while building this (the
-`TasksOperationsNotAllowed` ACR block on free/student subscriptions, the
-`WEBSITES_PORT` vs. FastAPI's internal 8000 collision, the missing
-`OPENAI_MODEL` 400 error, and the Azure CLI bug that needs a Portal
-workaround). Both the Docker build and a full container boot (FastAPI
-health-gate → Streamlit) were verified working from this exact folder
-before this was handed to you.
+Upload a PDF, ingest the document, and submit a question.
 
-Run `deploy/azure/teardown.sh` when you're done so nothing keeps billing.
+---
+
+## 11. Testing
+
+Integration tests are maintained under:
+
+```text
+tests/integration/
+```
+
+### Available Tests
+
+| Test | Purpose |
+|---|---|
+| `test_source_filter.py` | Validates source-specific and global FAISS retrieval |
+| `test_all_retrievers.py` | Exercises all four retrieval strategies |
+| `test_chain.py` | Tests chain initialization, answer generation, and missing-context fallback |
+
+### Run Individual Tests
+
+From `Live/Production_files/`:
+
+```bash
+python tests/integration/test_source_filter.py
+```
+
+```bash
+python tests/integration/test_all_retrievers.py
+```
+
+```bash
+python tests/integration/test_chain.py
+```
+
+These tests require the appropriate environment variables and local FAISS indexes. Tests that invoke external APIs also require valid API credentials and network access.
+
+### Evaluation Runner
+
+Run the offline comparative benchmark using:
+
+```bash
+python -m src.backend.evaluation.evaluation_runner
+```
+
+The runner uses the evaluation dataset and the configured local embedding indexes.
+
+---
+
+## 12. Docker and Deployment
+
+The application includes a Dockerfile for containerization.
+
+Build the image from the production application directory:
+
+```bash
+docker build -t rag-multi-document-assist .
+```
+
+Run the container using the environment variables and port configuration required by the Dockerfile:
+
+```bash
+docker run --env-file .env -p 8000:8000 rag-multi-document-assist
+```
+
+Check the Dockerfile and application entry point for the actual service startup configuration before deployment.
+
+Deployment configuration should be maintained separately from application source code.
+
+---
+
+## 13. Development Guidelines
+
+### Coding Practices
+
+- Keep API routes lightweight.
+- Place business orchestration inside service modules.
+- Keep retrieval strategies independently maintainable.
+- Validate metadata before indexing.
+- Use structured logging.
+- Keep evaluation outside the online retrieval path.
+- Handle external API failures explicitly.
+- Avoid hardcoding credentials or environment-specific paths.
+
+### Git Commit Convention
+
+Use meaningful commit prefixes:
+
+| Prefix | Purpose |
+|---|---|
+| `feat:` | New functionality |
+| `fix:` | Bug fixes |
+| `refactor:` | Code restructuring |
+| `test:` | Test additions or modifications |
+| `docs:` | Documentation updates |
+| `chore:` | Maintenance and configuration |
+
+Example:
+
+```bash
+git commit -m "feat: add source-aware retrieval across retrievers"
+```
+
+---
+
+## 14. Known Limitations and Future Enhancements
+
+Potential areas for further improvement:
+
+1. Improve retrieval ranking for numerical and formula-based questions.
+2. Add more diverse evaluation questions and reference answers.
+3. Expand automated regression testing.
+4. Introduce hybrid keyword and vector retrieval.
+5. Explore advanced reranking strategies.
+6. Add retrieval latency and token-usage tracking.
+7. Improve observability and failure reporting.
+8. Add authentication and authorization for multi-user deployments.
+9. Explore scalable vector storage for larger document collections.
+
+These are proposed improvements, not claims about currently implemented functionality.
+
+---
+
+## 15. Project Learning and Engineering Takeaways
+
+This project demonstrates the practical engineering challenges involved in building a production-oriented RAG application.
+
+Important areas explored include:
+
+- PDF processing and chunking.
+- Embedding model integration.
+- FAISS indexing and metadata management.
+- Source-aware retrieval.
+- Retrieval strategy comparison.
+- Context deduplication.
+- Grounded LLM generation.
+- Offline RAGAS evaluation.
+- Comparative benchmarking.
+- API and frontend integration.
+- Integration testing.
+- Git version control and project documentation.
+
+The primary engineering objective is to build a RAG system that is not only capable of generating answers, but also supports document traceability, controlled retrieval, measurable evaluation, and maintainable application architecture.
+
+---
+
+**Repository:** Multi-Document Assist
+**Documentation:** Technical Developer Guide
+**Application:** RAG Multi-Document Assist
+
+## 12. Azure Containerization and Deployment Architecture
+
+The application supports Docker-based containerization and Azure deployment.
+
+The deployment architecture uses Azure Container Registry (ACR) to store container images and Azure App Service to host the containerized application.
+
+### 12.1 Deployment Architecture
+
+```mermaid
+flowchart TD
+    A["Application Source Code"]
+    B["Dockerfile"]
+    C["Docker Image"]
+    D["Azure Container Registry"]
+    E["Azure App Service"]
+    F["Running Application"]
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+```
+
+### 12.2 Deployment Components
+
+| Component | Responsibility |
+|---|---|
+| Docker | Packages the application and dependencies |
+| Dockerfile | Defines the container build instructions |
+| Azure Container Registry | Stores and manages Docker images |
+| Azure App Service | Hosts and runs the containerized application |
+| Azure Resource Group | Organizes the Azure resources |
+| Azure CLI | Automates Azure resource management and deployment |
+
+### 12.3 Deployment Workflow
+
+The deployment process follows these stages:
+
+1. Build the Docker image locally.
+2. Authenticate with Azure.
+3. Authenticate with Azure Container Registry.
+4. Tag the Docker image with the ACR registry name.
+5. Push the image to ACR.
+6. Configure Azure App Service to use the image.
+7. Configure application environment variables.
+8. Verify application startup and health.
+
+### 12.4 Example Deployment Commands
+
+Authenticate with Azure:
+
+```bash
+az login
+```
+
+Authenticate with ACR:
+
+```bash
+az acr login --name <registry-name>
+```
+
+Build the image:
+
+```bash
+docker build -t <image-name>:latest .
+```
+
+Tag the image:
+
+```bash
+docker tag <image-name>:latest \
+<registry-name>.azurecr.io/<image-name>:latest
+```
+
+Push the image:
+
+```bash
+docker push \
+<registry-name>.azurecr.io/<image-name>:latest
+```
+
+Configure Azure App Service to use the container image through the Azure Portal or Azure CLI.
+
+### 12.5 Deployment Automation
+
+Where available in the repository, the Azure deployment scripts support:
+
+- Resource group creation.
+- Azure Container Registry provisioning.
+- Container image publishing.
+- App Service provisioning.
+- Application configuration.
+- Deployment and teardown.
+
+### 12.6 Deployment Challenges Encountered
+
+The following practical issues were encountered during deployment:
+
+| Issue | Engineering consideration |
+|---|---|
+| `TasksOperationsNotAllowed` | ACR resource creation restrictions on certain free/student subscriptions |
+| Container port mismatch | Aligning the Docker container port with the App Service configuration |
+| Missing `OPENAI_MODEL` | Configuring required application environment variables |
+| Azure CLI deployment issue | Using the Azure Portal as a workaround where necessary |
+
+### 12.7 Resource Management
+
+Azure resources should be stopped or deleted when they are no longer required to avoid unnecessary charges.
+
+Use the deployment teardown procedure where available.

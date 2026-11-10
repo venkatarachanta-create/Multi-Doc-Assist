@@ -2,291 +2,257 @@
 
 ### Production-Oriented Retrieval-Augmented Generation (RAG) Application
 
-**Multi-Document-Assist** is a document question-answering application designed to help users upload documents and retrieve context-aware answers based on their content.
+Multi-Document-Assist is a document question-answering application built with Python, LangChain, FastAPI, Streamlit, and FAISS. It supports document ingestion, vector indexing, multiple retrieval strategies, source-aware filtering, context-grounded answer generation, and offline RAG evaluation.
 
-Built with Python, FastAPI, Streamlit, and FAISS, the application organizes document ingestion and retrieval into modular components. Its architecture separates the user interface, API layer, orchestration services, and RAG building blocks to support maintainability, debugging, and future enhancements.
+**Core objective:** Let users ask questions about uploaded documents and receive answers grounded in retrieved document context.
 
-> **Core objective:** Enable users to ask questions about uploaded documents and receive relevant answers grounded in retrieved document context.
-
-**Technology focus:** Generative AI · Retrieval-Augmented Generation (RAG) · Vector Search · LLM Integration · FastAPI · Docker · Cloud Deployment
+**Technology focus:** Generative AI · RAG · LangChain · FAISS · OpenAI · Cohere · FastAPI · Streamlit · RAGAS · Docker
 
 ---
 
 ## Table of Contents
 
-* [Project Overview](#project-overview)
-* [Key Features](#key-features)
-* [Technology Stack](#technology-stack)
-* [System Architecture](#system-architecture)
-* [RAG Pipeline](#rag-pipeline)
-* [Project Structure](#project-structure)
-* [Getting Started](#getting-started)
-* [Running Locally](#running-locally)
-* [Running with Docker](#running-with-docker)
-* [API Overview](#api-overview)
-* [Deployment](#deployment)
-* [Evaluation and Testing](#evaluation-and-testing)
-* [Security Considerations](#security-considerations)
-* [Limitations and Future Improvements](#limitations-and-future-improvements)
-* [Learning Outcomes](#learning-outcomes)
-* [License](#license)
+- [Project Overview](#project-overview)
+- [Key Features](#key-features)
+- [Technology Stack](#technology-stack)
+- [System Architecture](#system-architecture)
+- [RAG Pipeline](#rag-pipeline)
+- [Source-Aware Retrieval](#source-aware-retrieval)
+- [Evaluation and Benchmark Results](#evaluation-and-benchmark-results)
+- [Integration Testing](#integration-testing)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+- [Running with Docker](#running-with-docker)
+- [API Overview](#api-overview)
+- [Deployment](#deployment)
+- [Security Considerations](#security-considerations)
+- [Limitations and Future Improvements](#limitations-and-future-improvements)
+- [Learning Outcomes](#learning-outcomes)
+- [License](#license)
 
 ---
 
 ## Project Overview
 
-Traditional document review often requires users to search through lengthy files manually to find relevant information.
+Traditional document review often requires users to search lengthy files manually. Keyword searches may miss semantically relevant passages, while an LLM without relevant source context can produce unsupported answers.
 
-Multi-Document-Assist explores how Retrieval-Augmented Generation can make document information easier to access.
+Multi-Document-Assist uses a modular RAG workflow to process documents, retrieve relevant passages, and generate answers using the retrieved context.
 
-The application separates document processing, retrieval, and answer generation into distinct components. This separation makes it easier to understand the pipeline, troubleshoot individual components, and experiment with retrieval strategies.
+### Engineering goals
 
-### The Problem
-
-* Finding relevant information in multiple documents can be time-consuming.
-* Keyword-based searches may not retrieve the most contextually relevant passages.
-* LLM responses need relevant source context to help reduce unsupported answers.
-* Monolithic implementations can be difficult to debug and extend.
-
-### The Solution
-
-The application provides a modular RAG workflow that combines document processing, vector-based retrieval, retrieval refinement, and LLM-based answer generation.
-
-The intended outcome is a more convenient way to query document collections through a user-facing application.
-
----
+- Build a reusable multi-document RAG architecture.
+- Support multiple retrieval strategies through a common retrieval service.
+- Support global and document-specific retrieval.
+- Maintain document identity and chunk metadata in the vector index.
+- Keep online answer generation separate from expensive offline evaluation.
+- Compare embedding configurations using a repeatable evaluation dataset.
 
 ## Key Features
 
-The repository includes components for the following capabilities. Confirm each feature against the current implementation before presenting it as fully operational.
-
-* **Document ingestion:** Components for loading documents into the RAG pipeline.
-* **Text splitting:** Document chunking to prepare content for retrieval.
-* **Configurable embeddings:** Support for OpenAI and Cohere embedding configurations.
-* **FAISS vector storage:** Vector indexing and similarity-based retrieval.
-* **Multi-query retrieval:** A component for exploring retrieval using multiple query formulations.
-* **Maximum Marginal Relevance (MMR):** A retrieval strategy intended to balance relevance and diversity.
-* **Context compression:** A component for refining retrieved context.
-* **Deduplication:** A component for reducing duplicate retrieved content.
-* **LLM integration:** Components for configuring the language model and generating answers.
-* **FastAPI backend:** API layer for application operations.
-* **Streamlit frontend:** Browser-based user interface.
-* **Docker packaging:** Container-based application deployment.
-* **Cloud deployment support:** Azure deployment scripts and a GitHub Actions workflow.
-* **RAG evaluation:** A RAGAS evaluation module for evaluating retrieval and answer quality.
-
----
+- **Document ingestion:** Load supported documents, extract text, split content into chunks, and index the chunks.
+- **Configurable embeddings:** OpenAI `text-embedding-3-small` and Cohere `embed-english-v3.0`.
+- **FAISS vector storage:** Persist and search vector representations.
+- **Document-aware indexing:** Validate required metadata, detect duplicate chunk IDs, and use file hashes to identify document versions.
+- **Four retrieval strategies:** FAISS similarity search, Maximum Marginal Relevance (MMR), contextual compression with Cohere reranking, and multi-query retrieval.
+- **Source-aware retrieval:** Filter retrieval by `source_id` and validate that returned chunks belong to the requested source.
+- **Context-grounded generation:** Use an answer-generation prompt that prioritizes supplied context and provides an explicit fallback when the answer is unavailable.
+- **Offline RAGAS evaluation:** Measure retrieval and generation quality outside the online request path.
+- **Integration tests:** Exercise retrieval strategies, source filtering, and answer-generation behavior.
+- **Application interfaces:** FastAPI backend and Streamlit frontend.
+- **Container and cloud assets:** Docker packaging and Azure deployment assets are included in the application directory.
 
 ## Technology Stack
 
-| Category             | Technology                                   | Purpose                                    |
-| -------------------- | -------------------------------------------- | ------------------------------------------ |
-| Programming language | Python                                       | Application development                    |
-| LLM framework        | LangChain components                         | RAG pipeline orchestration and integration |
-| LLM provider         | OpenAI                                       | Language-model integration                 |
-| Embeddings           | OpenAI / Cohere                              | Document and query representations         |
-| Vector store         | FAISS                                        | Vector indexing and retrieval              |
-| Backend              | FastAPI                                      | HTTP API layer                             |
-| Frontend             | Streamlit                                    | User interface                             |
-| Evaluation           | RAGAS                                        | RAG evaluation workflows                   |
-| Containerization     | Docker                                       | Packaging and running the application      |
-| Cloud deployment     | Azure App Service / Azure Container Registry | Container hosting and image storage        |
-| CI/CD                | GitHub Actions                               | Automated deployment workflow              |
-
-The technologies listed above reflect the intended stack. Exact package versions and active provider configurations are defined by the project dependencies and environment settings.
+| Category | Technology | Purpose |
+|---|---|---|
+| Language | Python | Application development |
+| Orchestration | LangChain | RAG components and workflow integration |
+| LLM provider | OpenAI | Answer generation and evaluation |
+| Embeddings | OpenAI, Cohere | Document and query vector representations |
+| Vector store | FAISS | Vector indexing and similarity retrieval |
+| Reranking | Cohere Rerank (`rerank-v3.5`) | Candidate reranking in contextual compression |
+| Backend | FastAPI | HTTP API |
+| Frontend | Streamlit | User interface |
+| Evaluation | RAGAS | Retrieval and generation quality evaluation |
+| Containerization | Docker | Application packaging |
+| Deployment assets | Azure App Service, Azure Container Registry, GitHub Actions | Container deployment workflow |
 
 ---
 
 ## System Architecture
 
-The system has three distinct architectural views:
-
-1. Application architecture — how the source code is organized.
-2. Runtime architecture — how the frontend and backend processes communicate.
-3. Deployment architecture — how the container is built and hosted.
-
-Keeping these views separate helps isolate problems. An issue in a retrieval component does not necessarily indicate a problem with the container or cloud deployment.
-
-### 1. Application Architecture — Code Layers
-
-The application is organized into layers with distinct responsibilities.
+The application separates the frontend, API, orchestration services, and RAG building blocks.
 
 ```mermaid
 flowchart TD
-    A["Frontend<br/>Streamlit UI"]
-    B["API Layer<br/>FastAPI Routes"]
-    C["Service Layer<br/>Ingestion and Retrieval"]
-    D["RAG Components<br/>Loading, Splitting, Embeddings,<br/>FAISS, MMR, Compression,<br/>Multi-Query, Deduplication,<br/>Chain and LLM"]
+    USER[User] --> UI[Streamlit Frontend]
+    UI --> API[FastAPI Routes]
+    API --> ING[Ingestion Service]
+    API --> RET[Retrieval Service]
 
-    A -->|"HTTP requests"| B
-    B --> C
-    C --> D
+    ING --> LOAD[Document Loader]
+    LOAD --> SPLIT[Text Splitter]
+    SPLIT --> EMB[Embedding Model]
+    EMB --> IDX[FAISS Index]
+
+    RET --> STRAT[Selected Retrieval Strategy]
+    IDX --> STRAT
+    STRAT --> DEDUP[Deduplication and Validation]
+    DEDUP --> CTX[Retrieved Context]
+    CTX --> LLM[Grounded Answer Generation]
+    LLM --> ANSWER[Answer]
+    ANSWER --> UI
+
+    RET -. offline benchmark uses production retrieval .-> EVAL[RAGAS Evaluation Runner]
+    ANSWER -. evaluated offline .-> EVAL
 ```
 
-**Layer responsibilities**
+| Layer | Responsibility |
+|---|---|
+| Frontend | Collect user input and display answers |
+| API | Expose upload and retrieval operations |
+| Services | Orchestrate ingestion and retrieval |
+| RAG components | Implement loading, splitting, embeddings, indexing, retrieval, and generation |
+| Evaluation | Run offline metric calculations and comparative benchmarks |
 
-| Layer          | Responsibility                                                           |
-| -------------- | ------------------------------------------------------------------------ |
-| Frontend       | Collect user input and present results                                   |
-| API            | Expose application endpoints and validate requests                       |
-| Services       | Orchestrate ingestion and retrieval workflows                            |
-| RAG components | Implement document processing, retrieval, and generation building blocks |
-
-The frontend communicates with the backend through the API rather than directly invoking the RAG components.
-
-The API routes delegate workflow execution to the service layer, which coordinates the underlying components.
-
-This separation improves maintainability and makes individual components easier to test.
-
-### 2. Runtime Architecture — One Container, Two Processes
-
-The Docker configuration is designed to run FastAPI and Streamlit within the same container.
-
-The intended runtime arrangement is:
-
-* FastAPI listens on the container's loopback interface at `127.0.0.1:8000`.
-* Streamlit listens on `0.0.0.0:$PORT`, using `8080` as the default port.
-* The entrypoint starts FastAPI and checks its health before starting Streamlit.
-* The browser accesses the application through the Streamlit port.
-* Streamlit communicates with FastAPI through the container's loopback interface.
-
-```mermaid
-flowchart TB
-    USER["User's Browser"]
-
-    subgraph CONTAINER["Single Docker Container"]
-        ENTRY["entrypoint.sh"]
-        API["FastAPI<br/>127.0.0.1:8000"]
-        HEALTH{"Health check passes?"}
-        UI["Streamlit<br/>0.0.0.0:$PORT"]
-
-        ENTRY --> API
-        API --> HEALTH
-        HEALTH -->|"Retry if unhealthy"| API
-        HEALTH -->|"Yes"| UI
-        UI -->|"Internal HTTP request"| API
-    end
-
-    USER -->|"Public application port"| UI
-```
-
-**Why this design?**
-
-It keeps the backend from being directly exposed through the application's public port while providing a browser-accessible interface.
-
-The actual network exposure depends on the Docker configuration and hosting environment. Binding FastAPI to loopback does not, by itself, replace a complete security review.
-
-If FastAPI's Swagger interface at `/docs` returns `404` on the public application URL, that is consistent with a deployment that exposes only Streamlit. Verify the actual routes and hosting configuration before diagnosing the cause.
-
-### 3. Deployment Architecture — Source Code to Public URL
-
-The repository includes Docker and Azure deployment assets intended to support a container-based deployment workflow.
-
-```mermaid
-flowchart LR
-    CODE["Application Source"]
-    DOCKER["Dockerfile"]
-    IMAGE["Container Image"]
-    ACR["Azure Container Registry"]
-    APP["Azure App Service"]
-    URL["Public Application URL"]
-    GH["GitHub Push"]
-    CI["GitHub Actions"]
-
-    CODE --> DOCKER
-    DOCKER --> IMAGE
-    IMAGE --> ACR
-    ACR --> APP
-    APP --> URL
-    GH --> CI
-    CI --> IMAGE
-```
-
-The intended workflow is:
-
-1. Build the application image from the Dockerfile.
-2. Push the image to Azure Container Registry.
-3. Configure Azure App Service to use the image.
-4. Supply the required application settings securely.
-5. Verify application health and functionality after deployment.
-
-The exact deployment process depends on the Azure subscription, permissions, registry configuration, and workflow settings.
-
-See [`Live/Production_files/deploy/azure/README.md`](Live/Production_files/deploy/azure/README.md) for the repository's Azure deployment instructions.
-
----
+The online retrieval service does not execute the full RAGAS evaluation workload. Evaluation is run separately through the evaluation runner.
 
 ## RAG Pipeline
 
-Retrieval-Augmented Generation combines document retrieval with language-model generation.
+### Document ingestion and indexing
 
-The application's modular components support the following conceptual workflow:
+1. Receive an uploaded document.
+2. Validate the filename and supported extension.
+3. Save the uploaded file.
+4. Calculate a SHA-256 file hash and derive a document `source_id`.
+5. Load and extract document text.
+6. Split the text into chunks.
+7. Attach document and chunk metadata.
+8. Validate metadata and index the chunks in FAISS.
 
-```mermaid
-flowchart TD
-    A["Upload Documents"]
-    B["Load and Extract Text"]
-    C["Split into Chunks"]
-    D["Generate Embeddings"]
-    E["Store in FAISS"]
-    F["Receive User Query"]
-    G["Retrieve Relevant Chunks"]
-    H["Optional Retrieval Refinement"]
-    I["Prepare Context"]
-    J["LLM Answer Generation"]
-    K["Return Answer"]
+Important metadata includes:
 
-    A --> B --> C --> D --> E
-    F --> G
-    E --> G
-    G --> H --> I --> J --> K
+- `source_id` — identifies the source document.
+- `chunk_id` — identifies an indexed chunk.
+- `file_hash` — identifies the content version.
+- `source` — records the source filename or path.
+- `page` — records page information when available.
+
+### Retrieval and generation
+
+The retrieval service selects a configured strategy, retrieves candidate chunks, deduplicates results, and prepares context for the LLM. The answer-generation prompt instructs the model to use the supplied context, preserve relevant qualifications, and avoid guessing.
+
+Expected fallback when context is insufficient:
+
+```text
+Answer is not available in the provided context.
 ```
 
-### Pipeline Stages
+### Retrieval strategies
 
-**1. Document ingestion**
+| Strategy | Purpose |
+|---|---|
+| FAISS similarity search | Retrieve chunks by vector similarity |
+| MMR | Balance query relevance and diversity among selected chunks |
+| Contextual compression | Retrieve a broader candidate set and rerank it with Cohere |
+| Multi-query retrieval | Expand a question into alternative formulations to improve retrieval coverage |
 
-Documents are loaded and prepared for downstream processing.
+The strategies can return different passages and therefore different answers. Source filtering guarantees document identity, not that every returned passage is optimally relevant.
 
-**2. Text splitting**
+## Source-Aware Retrieval
 
-Extracted text is divided into smaller chunks to support retrieval at a manageable level of granularity.
+When a source ID is supplied, the selected retriever applies a metadata filter so that retrieval is restricted to chunks belonging to that document. When no source ID is supplied, retrieval can search across the indexed collection.
 
-**3. Embedding generation**
+The retrieval service also validates returned documents against the requested source ID. This provides a second check beyond the vector-store filter.
 
-Text chunks are converted into vector representations using the configured embedding provider.
-
-**4. Vector indexing**
-
-The resulting vectors are stored in a FAISS index for similarity-based retrieval.
-
-**5. Query processing**
-
-A user's question is processed and used to retrieve potentially relevant document chunks.
-
-**6. Retrieval refinement**
-
-The repository contains components for techniques such as multi-query retrieval, MMR, context compression, and deduplication. Their actual use depends on the configured retrieval workflow.
-
-**7. Context preparation**
-
-Retrieved passages are prepared for the language model.
-
-**8. Answer generation**
-
-The language model generates a response using the supplied context and query.
-
-**9. Response delivery**
-
-The application returns the generated answer through its user-facing interface.
-
-> **Important:** The presence of a component in the repository does not necessarily mean every request uses that component. The actual execution order is determined by the application code and configuration.
+The source-filter integration test checks that all returned documents carry the expected `source_id`.
 
 ---
 
-## Project Structure
+## Evaluation and Benchmark Results
 
-The production-oriented application files are located under `Live/Production_files/`.
+The offline evaluation runner uses a 15-question dataset covering three HDFC Life policy documents.
+
+| Source document | Questions |
+|---|---:|
+| Sampoorna Jeevan | 5 |
+| Group Term Life | 5 |
+| Sanchay Plus | 5 |
+| **Total** | **15** |
+
+### Metrics
+
+| Metric | Interpretation |
+|---|---|
+| Context Precision | Relevance of retrieved context |
+| Response Relevancy | Relevance of the generated answer to the question |
+| Context Recall | Coverage of reference information by retrieved context |
+| Factual Correctness | Agreement between generated and reference answers |
+| Faithfulness | Whether the answer is supported by retrieved context |
+| Hallucination | Derived in this runner as `1 - faithfulness` |
+| LLM Judge | Custom LLM-based assessment with a score, explanation, and hallucination indicator |
+
+### Initial comparative benchmark
+
+The initial 15-question run produced these aggregate scores:
+
+| Metric | OpenAI `text-embedding-3-small` | Cohere `embed-english-v3.0` |
+|---|---:|---:|
+| Context Precision | 0.893 | 0.866 |
+| Response Relevancy | 0.879 | 0.923 |
+| Context Recall | 1.000 | 1.000 |
+| Factual Correctness | 0.569 | 0.568 |
+| Faithfulness | 0.951 | 0.936 |
+| Derived Hallucination | 0.049 | 0.064 |
+
+**Initial observations:** OpenAI scored higher on Context Precision and Faithfulness. Cohere scored higher on Response Relevancy. Context Recall was equal, and Factual Correctness was nearly identical.
+
+These results are specific to the selected documents, questions, retrieval configuration, and evaluation setup. They are not a universal ranking of embedding models. They are the initial baseline, not a result from a subsequent rerun using the improved answer-generation prompt.
+
+For Response Relevancy, the benchmark runner initializes one fixed evaluation embedding configuration and uses it for both retrieval-model experiments. Retrieval embeddings remain model-specific.
+
+### Run the benchmark
+
+From `Live/Production_files/`, after configuring credentials and building the required indexes:
+
+```bash
+python -m src.backend.evaluation.evaluation_runner
+```
+
+The runner writes per-model result files and a comparative report under `data/evaluation/`. Generated result files are runtime outputs and are excluded from version control; the evaluation dataset is retained for reproducibility.
+
+## Integration Testing
+
+Integration tests are located in:
+
+```text
+tests/
+└── integration/
+    ├── __init__.py
+    ├── test_all_retrievers.py
+    ├── test_chain.py
+    └── test_source_filter.py
+```
+
+Run these commands from `Live/Production_files/`:
+
+```bash
+python -m tests.integration.test_chain
+python -m tests.integration.test_source_filter
+python -m tests.integration.test_all_retrievers
+```
+
+The tests require the relevant local FAISS index and provider credentials. They invoke model providers and may incur API usage costs.
+
+| Test | Coverage |
+|---|---|
+| `test_chain.py` | Chain initialization, answer generation, and missing-context fallback |
+| `test_source_filter.py` | Source-specific FAISS filtering and global retrieval |
+| `test_all_retrievers.py` | Global and source-specific retrieval through all four strategies |
+
+These are integration tests, not isolated unit tests.
+
+## Project Structure
 
 ```text
 Multi-Doc-Assist/
@@ -294,23 +260,11 @@ Multi-Doc-Assist/
 ├── README.md
 └── Live/
     └── Production_files/
-        ├── .dockerignore
         ├── Dockerfile
         ├── entrypoint.sh
         ├── requirements.txt
-        │
-        ├── .github/
-        │   └── workflows/
-        │       └── azure-deploy.yml
-        │
         ├── deploy/
         │   └── azure/
-        │       ├── README.md
-        │       ├── azure-webapp.bicep
-        │       ├── deploy.sh
-        │       ├── load_env.sh
-        │       └── teardown.sh
-        │
         ├── src/
         │   ├── backend/
         │   │   ├── api/
@@ -319,92 +273,41 @@ Multi-Doc-Assist/
         │   │   ├── logger/
         │   │   ├── rag/
         │   │   └── services/
-        │   │
         │   ├── frontend/
-        │   │   ├── app.py
-        │   │   └── utils.py
-        │   │
         │   └── shared/
-        │       └── schemas.py
-        │
+        ├── tests/
+        │   └── integration/
         └── data/
-            ├── Input_files/
-            └── FAISS index directories/
+            └── evaluation/
+                └── evaluation_dataset.json
 ```
 
-The diagram is representative rather than exhaustive. Check the current repository for exact filenames and any additional modules.
-
-### Important Directories
-
-| Path                      | Purpose                                                               |
-| ------------------------- | --------------------------------------------------------------------- |
-| `src/backend/api/`        | API routes and endpoint logic                                         |
-| `src/backend/core/`       | Backend configuration and shared core functionality                   |
-| `src/backend/evaluation/` | Evaluation-related code                                               |
-| `src/backend/rag/`        | RAG pipeline components                                               |
-| `src/backend/services/`   | Ingestion and retrieval orchestration                                 |
-| `src/frontend/`           | Streamlit application                                                 |
-| `src/shared/`             | Shared schemas and data structures                                    |
-| `data/Input_files/`       | Input documents used by the application                               |
-| `data/` FAISS directories | Persisted vector-index artifacts, if used by the active configuration |
-| `deploy/azure/`           | Azure deployment scripts and documentation                            |
-| `.github/workflows/`      | GitHub Actions workflow configuration                                 |
-
----
+Runtime FAISS indexes, uploaded documents, credentials, logs, and generated evaluation reports are not intended to be committed. The exact deployment assets and module filenames are maintained under `Live/Production_files/`.
 
 ## Getting Started
 
 ### Prerequisites
 
-Install the following tools before running the application:
+- Python 3.12 (documented example environment; align with the version configured for your deployment).
+- Git.
+- OpenAI API key for OpenAI-backed functionality.
+- Cohere API key for Cohere embeddings and reranking.
+- Docker Desktop for container execution.
 
-* Python 3.12, as used in the example setup below.
-* Git.
-* An OpenAI API key if using OpenAI-backed functionality.
-* A Cohere API key if using Cohere-backed functionality.
-* Docker Desktop if you want to run the containerized application.
-
-Check the Python version:
-
-```bash
-python --version
-```
-
-If the project uses a different Python version in its deployment environment, align your local environment with the project's tested configuration.
-
-### 1. Clone the Repository
+### 1. Clone and navigate
 
 ```bash
 git clone https://github.com/venkatarachanta-create/Multi-Doc-Assist.git
-cd Multi-Doc-Assist
+cd Multi-Doc-Assist/Live/Production_files
 ```
 
-### 2. Navigate to the Application Directory
-
-The application code and dependency file are nested under `Live/Production_files/`.
-
-```bash
-cd Live/Production_files
-```
-
-Run the following commands from this directory unless otherwise specified.
-
-### 3. Create a Virtual Environment
+### 2. Create and activate a virtual environment
 
 **Windows PowerShell**
 
 ```powershell
 py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-If PowerShell prevents activation because of its execution policy, use an approved activation method for your environment rather than changing system-wide security settings unnecessarily.
-
-**Windows Command Prompt**
-
-```bat
-py -3.12 -m venv .venv
-.venv\Scripts\activate.bat
+.venv\Scripts\Activate.ps1
 ```
 
 **macOS / Linux**
@@ -414,18 +317,16 @@ python3.12 -m venv .venv
 source .venv/bin/activate
 ```
 
-### 4. Install Dependencies
+### 3. Install dependencies
 
 ```bash
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 5. Configure Environment Variables
+### 4. Configure environment variables
 
-Create a local `.env` file only if the application configuration supports loading it. Otherwise, supply the variables through your shell or deployment environment.
-
-Example:
+Create a local `.env` file if supported by the application configuration, or supply values through your shell or deployment environment.
 
 ```dotenv
 OPENAI_API_KEY=your_openai_api_key
@@ -433,76 +334,41 @@ COHERE_API_KEY=your_cohere_api_key
 OPENAI_MODEL=gpt-4o-mini
 ```
 
-Use only the credentials required by your selected configuration.
+Use the exact variable names and defaults expected by `src/backend/core/config.py`. Only configure credentials required by the selected functionality. Never commit real API keys.
 
-**Security rules:**
+### 5. Build the FAISS indexes
 
-* Never commit API keys or other secrets.
-* Do not paste real credentials into issues, screenshots, or documentation.
-* Keep `.env` files excluded from Git.
-* Use the hosting platform's secret or application-setting mechanism in production.
-* Never place real credentials directly in Docker build instructions or source code.
+Start the application and upload documents through the ingestion interface/API using the selected embedding configuration. FAISS indexes are generated locally and are not included in this repository.
 
-The environment-variable names and defaults above should match the actual application configuration. Review the relevant configuration modules before relying on them.
-
----
-
-## Running Locally
-
-### 1. Start FastAPI
-
-Open a terminal in `Live/Production_files/` with the virtual environment activated.
+### 6. Start FastAPI
 
 ```bash
 python -m uvicorn src.backend.main:app --host 127.0.0.1 --port 8000
 ```
 
-The backend should become available at:
+If enabled by the application, local API documentation is available at `http://127.0.0.1:8000/docs`.
 
-```text
-http://127.0.0.1:8000
-```
+### 7. Start Streamlit
 
-If the application exposes FastAPI's default OpenAPI interface locally, its documentation may be available at:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-If the command fails, confirm that `src/backend/main.py` exists and exports an ASGI application named `app`.
-
-### 2. Start Streamlit
-
-Open a second terminal in the same `Live/Production_files/` directory and activate the same virtual environment.
+Open a second terminal in the same directory, activate the virtual environment, and run:
 
 ```bash
 python -m streamlit run src/frontend/app.py
 ```
 
-Streamlit normally displays its local application URL in the terminal. Open that address in your browser.
-
-### Local Runtime Notes
-
-* Start FastAPI before testing features that call the backend.
-* Keep both processes running while using the application.
-* Ensure the frontend's backend URL matches the address and port used by FastAPI.
-* The local development commands above run two separate processes; they do not reproduce the single-container startup process.
-
----
+Open the local URL printed by Streamlit. Keep both processes running while using the application.
 
 ## Running with Docker
 
-The Docker configuration is designed to run the backend and frontend within one container.
+Run these commands from `Live/Production_files/`, where the Dockerfile is located.
 
-Run the following commands from `Live/Production_files/`, where the Dockerfile is located.
-
-### 1. Build the Image
+### Build the image
 
 ```bash
 docker build -t multi-document-assist .
 ```
 
-### 2. Run the Container
+### Run the container
 
 **Windows PowerShell**
 
@@ -524,223 +390,84 @@ docker run --rm -p 8080:8080 \
   multi-document-assist
 ```
 
-Set the environment variables in your shell before running the command. If the application uses only one embedding provider, supply only the credentials it requires.
+Open `http://localhost:8080` if the container and Streamlit configuration use port 8080. Supply only the credentials required by the selected configuration.
 
-### 3. Open the Application
-
-```text
-http://localhost:8080
-```
-
-The Docker container's public application port is intended to serve Streamlit. FastAPI uses the internal loopback address described in the runtime architecture.
-
-If the container exits or the application does not load, inspect the logs:
+Inspect container logs with:
 
 ```bash
 docker ps -a
 docker logs <container_id>
 ```
 
-Replace `<container_id>` with the actual container ID.
-
----
-
 ## API Overview
 
-The architecture describes the following application operations:
+The application exposes upload and retrieval operations through FastAPI. The current route definitions and schemas are the source of truth for exact parameters and response fields.
 
-| Method | Endpoint    | Intended purpose                                                  |
-| ------ | ----------- | ----------------------------------------------------------------- |
-| `POST` | `/upload`   | Submit documents for ingestion                                    |
-| `POST` | `/retrieve` | Submit a query for document-based retrieval and answer generation |
-| `GET`  | `/health`   | Check backend health                                              |
+| Method | Endpoint | Purpose |
+|---|---|---|
+| `POST` | `/upload` | Upload and ingest a document |
+| `POST` | `/retrieve` | Retrieve document context and generate an answer |
+| `GET` | `/health` | Backend health check, if enabled in the deployed application |
 
-Confirm the exact endpoint paths, request schemas, response formats, and authentication behavior against the FastAPI route definitions before integrating another client.
-
-The `/health` endpoint is also used by the container startup process, according to the documented runtime design.
-
----
+Consult the FastAPI route definitions and request/response schemas before integrating another client.
 
 ## Deployment
 
-### Render
+The repository includes Azure deployment assets under `Live/Production_files/deploy/azure/`.
 
-The repository has previously been associated with this application URL:
+The intended container workflow is to build an image, push it to Azure Container Registry, configure Azure App Service to use the image, supply secrets through application settings, and verify health after deployment.
 
-**Application:** https://multi-document-assist.onrender.com
-
-Verify that the service is still active and that document upload and retrieval work before presenting it as a live demo.
-
-If the service is unavailable, update the README to explain that the hosted demo is temporarily offline rather than implying that it is operational.
-
-### Azure App Service
-
-The repository includes deployment assets for Azure App Service and Azure Container Registry.
-
-Relevant files include:
-
-* `deploy/azure/README.md`
-* `deploy/azure/azure-webapp.bicep`
-* `deploy/azure/deploy.sh`
-* `deploy/azure/load_env.sh`
-* `deploy/azure/teardown.sh`
-* `.github/workflows/azure-deploy.yml`
-
-Review the actual location of the GitHub Actions workflow in the repository before using it. GitHub Actions automatically discovers workflows from the repository's designated `.github/workflows/` directory; a workflow nested elsewhere will not be discovered automatically.
-
-### Azure Deployment Workflow
-
-The intended process is:
-
-1. Configure the Azure subscription and required permissions.
-2. Create or configure Azure Container Registry.
-3. Build and publish the Docker image.
-4. Configure Azure App Service to use that image.
-5. Set the required environment variables securely.
-6. Configure the application port.
-7. Verify the application health endpoint and frontend.
-8. Test document ingestion and question answering.
-
-Azure subscription restrictions may affect whether images can be built in Azure or need to be built and pushed from a local Docker installation.
-
-### GitHub Actions
-
-The repository includes an Azure deployment workflow. To use it, verify that:
-
-* The workflow is located under the repository's root `.github/workflows/` directory.
-* The required GitHub secrets and variables are configured.
-* The Azure identity has the necessary permissions.
-* Registry authentication and image names match the deployment configuration.
-* The workflow completes successfully.
-* The deployed application passes a post-deployment health check.
-
-A workflow file being present does not, by itself, demonstrate that CI/CD is operational.
-
-For detailed instructions, consult [`deploy/azure/README.md`](Live/Production_files/deploy/azure/README.md).
-
----
-
-## Evaluation and Testing
-
-A reliable RAG application should be evaluated on more than whether it returns an answer.
-
-The repository includes a RAGAS evaluation module. Use it to build a reproducible evaluation process and document the results after running the evaluation against a defined dataset.
-
-### Suggested Evaluation Dimensions
-
-| Dimension           | What to evaluate                                                                                |
-| ------------------- | ----------------------------------------------------------------------------------------------- |
-| Retrieval relevance | Whether retrieved passages are relevant to the question                                         |
-| Context recall      | Whether the retrieval process captures the information needed to answer                         |
-| Faithfulness        | Whether the generated answer is supported by the retrieved context                              |
-| Answer relevance    | Whether the response addresses the user's question                                              |
-| Latency             | How long ingestion, retrieval, and generation take                                              |
-| Cost                | Token usage and model or embedding costs, where measurable                                      |
-| Robustness          | How the application handles missing information, malformed requests, and unsupported file types |
-
-The availability and precise definitions of individual metrics depend on the evaluation implementation and dataset.
-
-### Recommended Test Cases
-
-1. Ask a question whose answer is explicitly stated in a document.
-2. Ask a question that requires combining information from multiple documents.
-3. Ask a question whose answer is absent from the uploaded documents.
-4. Test an empty or malformed query.
-5. Upload an unsupported or invalid document.
-6. Test duplicate or overlapping document content.
-7. Compare retrieval behavior across supported embedding configurations.
-8. Test the API's response to invalid requests and unavailable dependencies.
-9. Restart the application and verify the expected behavior of persisted indexes.
-10. Test the container startup and health-check sequence.
-
-### Reporting Results
-
-Once the evaluation has been executed, add a results table with:
-
-* Dataset size and composition.
-* Model and embedding configuration.
-* Retrieval settings.
-* Evaluation metrics and scores.
-* Average and percentile latency, if measured.
-* Test environment and date.
-* Known limitations.
-
-**Do not publish invented scores or performance claims.** Record measured results, including negative findings and known limitations.
-
----
+Deployment success depends on subscription, permissions, registry configuration, and workflow settings. Verify the hosted application is active before presenting a public demo URL.
 
 ## Security Considerations
 
-Document-processing applications may handle sensitive information. Security should be considered throughout ingestion, storage, retrieval, logging, and deployment.
-
-* **API credentials:** Store keys in environment variables or a managed secrets service.
-* **Uploaded documents:** Avoid committing private, personal, or confidential documents to a public repository.
-* **Redistribution rights:** Ensure sample documents can legally be shared.
-* **Input validation:** Validate uploads, request schemas, file types, and file sizes.
-* **Logging:** Avoid logging API keys, sensitive document text, or unnecessary personal information.
-* **Network exposure:** Expose only the services and ports required by the deployment.
-* **Dependency management:** Review package versions and security advisories.
-* **Access control:** Add authentication and authorization before using the application with private documents in a multi-user production environment.
-* **Resource limits:** Consider upload limits, processing timeouts, and rate limiting to reduce abuse and unexpected costs.
-* **Document isolation:** Ensure one user's documents and retrieved content cannot be accessed by another user without authorization.
-
-Before making this repository public, inspect tracked PDFs, FAISS index files, logs, environment files, and Git history for secrets or sensitive content.
-
-If sensitive material was committed, deleting it from the latest version is not sufficient to remove it from previous commits. A history cleanup may be necessary, and any exposed credentials must be rotated.
-
----
+- Store API keys in environment variables or a managed secrets service.
+- Keep `.env` files, uploaded documents, and private data out of Git.
+- Review tracked files and Git history before making the repository public.
+- Ensure sample documents and third-party assets can legally be redistributed.
+- Validate uploaded file types and request inputs.
+- Avoid logging credentials or unnecessary sensitive document content.
+- Add authentication and authorization before using the application for multi-user private-document workloads.
+- Review network exposure, upload limits, processing timeouts, rate limits, and dependency security.
+- FAISS local index loading uses deserialization; only load trusted index artifacts.
 
 ## Limitations and Future Improvements
 
-Potential areas for further development include:
-
-* Add automated unit and integration tests.
-* Add a reproducible benchmark dataset for RAG evaluation.
-* Report measured retrieval quality and end-to-end latency.
-* Improve source attribution so answers can be traced to document passages or page numbers.
-* Add explicit handling for questions that cannot be answered from the available context.
-* Introduce authentication and user-level document isolation.
-* Improve document-format validation and ingestion error reporting.
-* Add monitoring, structured logs, and production health checks.
-* Add automated deployment verification and rollback procedures.
-* Evaluate persistence and recovery behavior for vector indexes.
-* Document deployment cost and resource requirements.
-
-These are suggested improvements, not claims that the features are already implemented.
-
----
+- Expand the evaluation dataset and add more document types.
+- Run and publish a new comparative benchmark after the improved generation prompt.
+- Add hybrid search combining dense and keyword retrieval.
+- Compare additional reranking approaches.
+- Add source citations in generated answers, including page-level references.
+- Add automated CI execution for tests that do not require live provider credentials.
+- Add authentication and user-level document isolation.
+- Improve ingestion observability, monitoring, and deployment verification.
+- Evaluate index backup, persistence, and recovery procedures.
+- Measure end-to-end latency and operational cost.
 
 ## Learning Outcomes
 
-This project provides an opportunity to explore and demonstrate:
+This project demonstrates practical work with:
 
-* Retrieval-Augmented Generation application design.
-* Document loading, chunking, and embedding workflows.
-* Vector search using FAISS.
-* Retrieval refinement techniques such as MMR and multi-query retrieval.
-* Modular backend design with FastAPI.
-* Frontend integration using Streamlit.
-* Containerization with Docker.
-* Environment-based configuration.
-* Cloud deployment concepts using Azure App Service and Azure Container Registry.
-* RAG evaluation and quality measurement.
-
----
+- Modular Retrieval-Augmented Generation architecture.
+- Document loading, chunking, embeddings, and FAISS indexing.
+- Multiple retrieval strategies and reranking.
+- Metadata-based source filtering and validation.
+- Context-grounded LLM answer generation.
+- Offline RAGAS evaluation and comparative benchmarking.
+- FastAPI and Streamlit integration.
+- Docker packaging and cloud deployment concepts.
+- Integration testing and structured Git commit practices.
 
 ## License
 
-Add a license before encouraging reuse or redistribution of this project.
-
-If no license has been selected, state that the project is not yet licensed for reuse. Also confirm that any sample documents and other third-party assets can legally be distributed with the repository.
-
----
+No license is specified here. Unless a license is added to the repository, assume that reuse and redistribution are not granted by default. Confirm the redistribution rights for any sample documents or third-party assets.
 
 ## Author
 
-**Multi-Document-Assist**
+**AV Rajanna**
 
-A portfolio project exploring modular RAG application development, document retrieval, LLM integration, and container-based deployment.
+Project: Multi-Document-Assist
+Repository: https://github.com/venkatarachanta-create/Multi-Doc-Assist
+LinkedIn: https://www.linkedin.com/in/venkata-rajanna-achanta-88962236/
 
-**Repository:** https://github.com/venkatarachanta-create/Multi-Doc-Assist
-
-**Project focus:** Generative AI · RAG · Python · FastAPI · FAISS · Streamlit · Docker · Azure
+**Project focus:** Generative AI · RAG Systems · Python · LangChain · FastAPI · FAISS · Streamlit · LLM Evaluation
